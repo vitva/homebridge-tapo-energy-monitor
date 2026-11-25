@@ -1,7 +1,7 @@
 {
   "name": "homebridge-tapo-energy-monitor",
   "version": "0.2.0",
-  "description": "Local Tapo energy monitoring and consumption history for Homebridge, with optional Matter energy sensor export",
+  "description": "Cloud-based Tapo energy monitoring and consumption history for Homebridge",
   "main": "index.js",
   "scripts": {
     "test": "node --test",
@@ -9,16 +9,17 @@
   },
   "keywords": [
     "homebridge-plugin",
+    "supports-matter",
     "tapo",
     "energy-monitor",
-    "matter",
+    "energy-monitoring",
     "p110m",
     "s112",
     "s110e"
   ],
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || ^26.0.0",
-    "homebridge": ">=1.8.0"
+    "homebridge": ">=2.2.0"
   },
   "dependencies": {
     "@homebridge/plugin-ui-utils": "^2.3.0"
@@ -27,7 +28,7 @@
     "homebridge": "2.5.0"
   },
   "peerDependencies": {
-    "homebridge": ">=1.8.0"
+    "homebridge": ">=2.2.0"
   },
   "peerDependenciesMeta": {
     "homebridge": {
