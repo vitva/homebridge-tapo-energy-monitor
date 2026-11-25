@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { runTapoCloudProbe } = require('../src/tapo-cloud');
+const { probeTapoThingCloud } = require('../src/tapo-cloud-client');
 
 (async () => {
   const { HomebridgePluginUiServer } = await import('@homebridge/plugin-ui-utils');
@@ -38,11 +39,15 @@ const { runTapoCloudProbe } = require('../src/tapo-cloud');
       const pythonExecutable = typeof payload.pythonExecutable === 'string' && payload.pythonExecutable.trim()
         ? payload.pythonExecutable.trim()
         : 'python3';
+      const transport = payload.transport === 'node' ? 'node' : 'python';
       if (!username || !password) {
         return { ok: false, code: 'credentials_required', message: 'Укажите email и пароль аккаунта Tapo.' };
       }
       if (username.length > 320 || password.length > 2048 || mfaCode.length > 32) {
         return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
+      }
+      if (transport === 'node') {
+        return probeTapoThingCloud({ username, password, mfaCode });
       }
       return runTapoCloudProbe({ username, password, mfaCode, pythonExecutable });
     }
