@@ -49,7 +49,7 @@ class TapoEnergyMonitorPlatform {
       return;
     }
 
-    const sample = () => {
+    this.store.setActiveDevices(normalized.map(device => device.id));\n\n    const sample = () => {
       const now = Date.now();
       for (const device of normalized) {
         this.store.recordPower(device.id, device.powerW, now, device);
