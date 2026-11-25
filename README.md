@@ -70,7 +70,7 @@ This is a connectivity diagnostic, not production polling. A successful login an
 - Tapo S112
 - Tapo S110E
 
-Cloud Thing API support for these models remains to be implemented and verified against the user's account and devices. When verified real counters are available, they will be exposed separately from estimates; they will not be added twice to the same total.
+P110M cloud discovery and the read-only `/usage` diagnostic are implemented; scheduled aggregation remains unconnected until its returned values are verified. S112 and S110E cloud support remains unimplemented. When verified real counters are available, they will be exposed separately from estimates; they will not be added twice to the same total.
 
 ## Development
 
