@@ -29,7 +29,7 @@ Matter power is sent in milliwatts (mW); cumulative energy is sent in milliwatt-
 
 The required transport is **TP-Link Tapo account/cloud only**. The plugin must not require the Homebridge server to share a LAN with the dacha devices, and it must not fall back to direct-IP/local polling.
 
-A reverse-engineered cloud client, `tplc`, documents Tapo account authentication, device discovery and a cloud-to-device passthrough. Its read-only energy commands list P110, but do not yet list P110M, S112 or S110E. The passthrough documentation shows that the Tapo cloud can relay device-protocol requests such as `emeter.get_realtime`; this gives us a concrete route to test with P110M without local network access. Exact P110M history commands and the S112/S110E data shapes remain unverified.
+The P110M route now targets the newer Tapo Thing Cloud API: account authentication, service discovery, Thing device listing, and the read-only `GET /v1/things/{thingName}/usage` endpoint. This is distinct from the older device passthrough API and is a better fit for current P110M firmware. The response and historical fields still need verification against the user's account.
 
 The implementation plan is therefore:
 - authenticate to the TP-Link/Tapo account and discover devices through the Tapo cloud;
@@ -48,10 +48,10 @@ The custom Homebridge UI includes a **Проверка облака TP-Link Tapo
 - logs in to the Tapo cloud only (no Kasa login, device IP or dacha LAN access);
 - supports an email MFA code when TP-Link requests one;
 - lists devices returned by the Tapo cloud account;
-- for discovered P110M devices, tries the read-only `emeter.get_realtime` passthrough command;
+- discovers devices through the Tapo Thing API and requests the read-only `/usage` resource for discovered P110M devices;
 - never sends relay, power, reboot, reset or configuration commands.
 
-The email, password and MFA code are submitted to the local Homebridge UI server over its plugin request channel, passed to the helper over stdin, and are not written to plugin settings or logs. The cloud session token is held only in the short-lived diagnostic process and is not persisted.
+The email, password and MFA code are submitted to the local Homebridge UI server over its plugin request channel, passed to the helper over stdin, and are not written to plugin settings or logs. The cloud session token is held only in the short-lived diagnostic process and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
 
 The helper requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path:
 
@@ -62,7 +62,7 @@ python3 -m venv /path/to/tapo-cloud-venv
 
 For example, the configured executable would be `/path/to/tapo-cloud-venv/bin/python`. The venv and package must exist in the same container/filesystem where Homebridge runs.
 
-This is a connectivity diagnostic, not production polling. A successful account login does not prove P110M energy support. The device-specific response must be verified first; only then can live values and history be wired into the store.
+This is a connectivity diagnostic, not production polling. A successful login and device listing do not prove that the P110M `/usage` response contains valid current power and history. The returned structure must be checked for units, time zone, and counter semantics before wiring it into the store.
 
 ## Planned physical devices
 
