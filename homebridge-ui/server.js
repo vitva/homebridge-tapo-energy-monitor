@@ -16,8 +16,7 @@ const { runTapoCloudProbe } = require('../src/tapo-cloud');
     }
 
     async getSummary(payload = {}) {
-      const requestedDirectory = typeof payload.dataDirectory === 'string' ? payload.dataDirectory.trim() : '';
-      const directory = requestedDirectory ? path.resolve(requestedDirectory) : this.homebridgeStoragePath;
+      const directory = this.homebridgeStoragePath;
       if (!directory) throw new Error('Homebridge storage directory is not available.');
       const filePath = path.join(directory, 'tapo-energy-history.json');
 
