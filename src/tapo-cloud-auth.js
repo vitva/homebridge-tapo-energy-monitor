@@ -209,6 +209,35 @@ class TapoCloudAuth {
     };
   }
 
+  async discoverThingService(username, token) {
+    if (typeof username !== 'string' || !username.trim() ||
+        typeof token !== 'string' || !token.trim()) {
+      throw new Error('Tapo account name and session token are required for Thing service discovery.');
+    }
+
+    // TP-Link's newer Thing API expects the current Tapo app identity/version.
+    this.query.appVer = '3.13.818';
+    const response = await this.post(this.host, '/api/v2/common/getAppServiceUrlByCloudUserName', {
+      cloudUserName: username.trim(),
+      serviceIds: [
+        'nbu.iot-app-server.app-v2',
+        'nbu.iot-cloud-gateway.app-v2',
+        'nbu.iot-security.appdevice-v2'
+      ]
+    }, token);
+
+    if (Number(response.error_code) !== 0) {
+      throw new Error('TP-Link Thing service discovery failed (code ' + Number(response.error_code) + ').');
+    }
+    const services = response.result?.serviceList;
+    if (!Array.isArray(services)) {
+      throw new Error('TP-Link returned an invalid Thing service list.');
+    }
+    const appService = services.find(item =>
+      item && item.serviceId === 'nbu.iot-app-server.app-v2');
+    return validateThingHost(appService?.serviceUrl);
+  }
+
   async refresh(refreshToken) {
     if (typeof refreshToken !== 'string' || !refreshToken) {
       throw new Error('A Tapo refresh token is required.');
