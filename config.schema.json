@@ -2,7 +2,7 @@
   "pluginAlias": "TapoEnergyMonitor",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Prototype: simulated readings only. Real Tapo device communication is not implemented yet.",
+  "headerDisplay": "Multi-device simulator. All readings are simulated; real Tapo communication is not implemented.",
   "footerDisplay": "Data is stored locally on the Homebridge host.",
   "schema": {
     "type": "object",
@@ -30,13 +30,76 @@
         "type": "number",
         "default": 450,
         "minimum": 0,
-        "maximum": 5000
+        "maximum": 5000,
+        "description": "Fallback power for the single demo device when Simulated devices is empty."
       },
       "dataDirectory": {
         "title": "Data directory (optional)",
         "type": "string",
         "default": "",
         "description": "Leave empty to use the Homebridge storage directory."
+      },
+      "simulatedDevices": {
+        "title": "Simulated devices",
+        "type": "array",
+        "description": "Add one row per test device. These are simulated readings, not physical Tapo devices.",
+        "items": {
+          "type": "object",
+          "title": "Device",
+          "properties": {
+            "id": {
+              "title": "Unique device ID",
+              "type": "string"
+            },
+            "name": {
+              "title": "Display name",
+              "type": "string"
+            },
+            "model": {
+              "title": "Model",
+              "type": "string",
+              "enum": [
+                "P110M",
+                "S112",
+                "S110E",
+                "Other"
+              ],
+              "default": "P110M"
+            },
+            "powerW": {
+              "title": "Simulated power (W)",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000,
+              "default": 100
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "powerW"
+          ]
+        },
+        "default": [
+          {
+            "id": "demo-p110m",
+            "name": "Demo P110M",
+            "model": "P110M",
+            "powerW": 450
+          },
+          {
+            "id": "demo-s112",
+            "name": "Demo S112",
+            "model": "S112",
+            "powerW": 120
+          },
+          {
+            "id": "demo-s110e",
+            "name": "Demo S110E",
+            "model": "S110E",
+            "powerW": 60
+          }
+        ]
       }
     },
     "required": [
