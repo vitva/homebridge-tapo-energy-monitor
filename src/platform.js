@@ -34,18 +34,17 @@ class TapoEnergyMonitorPlatform {
       return;
     }
 
-    const storageRoot = this.config.dataDirectory && this.config.dataDirectory.trim()
-      ? path.resolve(this.config.dataDirectory.trim())
-      : this.api.user.storagePath();
+    const configured = Array.isArray(this.config.simulatedDevices) ? this.config.simulatedDevices : [];
+    if (!configured.length) {
+      this.log.warn('No simulated devices configured. The platform remains idle until at least one device is added in Homebridge UI.');
+      return;
+    }
+
+    const storageRoot = this.api.user.storagePath();
     this.store = new EnergyStore(storageRoot, this.log);
 
     const interval = Math.max(30, Math.min(3600, Number(this.config.pollingIntervalSeconds) || 60));
-    const configured = Array.isArray(this.config.simulatedDevices) ? this.config.simulatedDevices : [];
-    const devices = configured.length
-      ? configured
-      : [{ id: 'demo-p110m', name: 'Demo P110M', model: 'P110M', powerW: this.config.simulatedPowerW ?? 450 }];
-
-    const normalized = devices
+    const normalized = configured
       .filter(device => device && typeof device.id === 'string' && device.id.trim())
       .map(device => ({
         id: device.id.trim(),
