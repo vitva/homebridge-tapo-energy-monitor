@@ -25,6 +25,19 @@ The Matter sensor is deliberately named **Tapo Energy — Расчётная**. 
 
 Matter power is sent in milliwatts (mW); cumulative energy is sent in milliwatt-hours (mWh). The local dashboard continues to show watts (W) and watt-hours (Wh).
 
+## Data-source architecture decision
+
+TP-Link account login and Tapo cloud device discovery are not the same as cloud energy telemetry. The reviewed cloud client documents Tapo discovery/basic control, but no verified Tapo cloud energy-history endpoint for P110M, S112 or S110E. TP-Link support also confirms that P110M history cannot be downloaded while the device is offline.
+
+The implementation plan is therefore:
+- use account/cloud discovery only as an optional device-inventory source;
+- retrieve P110M live values and history through its supported device API when reachable on the LAN;
+- keep S112 and S110E unsupported for real readings until their model-specific API responses are verified;
+- label every value by source (real device history, real meter counter, estimated from power, or unavailable);
+- never fill missing/offline periods with invented values or mix real counters with estimates.
+
+See [the data-source capability assessment](docs/tapo-data-source-assessment.md) for the evidence and adapter plan.
+
 ## Planned physical devices
 
 - Tapo P110M
