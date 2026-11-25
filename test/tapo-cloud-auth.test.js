@@ -2,7 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateCloudBase, signBody } = require('../src/tapo-cloud-auth');
+const { EventEmitter } = require('node:events');
+const { PassThrough } = require('node:stream');
+const path = require('node:path');
+const fs = require('node:fs');
+const { TapoCloudAuth, validateCloudBase, signBody } = require('../src/tapo-cloud-auth');
 
 test('accepts only HTTPS TP-Link cloud base URLs', () => {
   assert.equal(validateCloudBase('https://n-wap.i.tplinkcloud.com/'),
@@ -34,4 +38,64 @@ test('does not accept malformed TP-Link cloud URLs', () => {
   for (const value of ['', null, 'not a url', 'https://tplinkcloud.com']) {
     assert.throws(() => validateCloudBase(value));
   }
+});
+
+test('performs regional discovery and login using the bundled TP-Link CA', async () => {
+  const calls = [];
+  const request = (url, options, callback) => {
+    calls.push({ url: new URL(String(url)), options });
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      const payload = calls.length === 1
+        ? { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } }
+        : { error_code: 0, result: { token: 'test-session-token', refreshToken: 'test-refresh-token' } };
+      response.end(JSON.stringify(payload));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, termId: 'test-terminal' });
+  const result = await auth.login({ username: 'test@example.com', password: 'not-a-real-password' });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.authenticated, true);
+  assert.equal(result.token, 'test-session-token');
+  assert.equal(result.refreshToken, 'test-refresh-token');
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.options.method === 'POST' && call.options.rejectUnauthorized === true));
+  assert.ok(calls.every(call => Buffer.isBuffer(call.options.ca) && call.options.ca.length > 0));
+  assert.ok(calls[0].url.pathname.endsWith('/getAccountStatusAndUrl'));
+  assert.ok(calls[1].url.pathname.endsWith('/login'));
+  assert.equal(calls[1].url.hostname, 'eu1.tplinkcloud.com');
+  assert.equal(calls[1].options.headers['Content-Type'], 'application/json;charset=UTF-8');
+  assert.ok(fs.existsSync(path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')));
+});
+
+test('returns an MFA challenge without retaining account credentials', async () => {
+  const replies = [
+    { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } },
+    { error_code: -20677, result: { mfaType: 'verifyCodeLogin' } }
+  ];
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify(replies.shift()));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, termId: 'test-terminal' });
+  const result = await auth.login({ username: 'test@example.com', password: 'not-a-real-password' });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'mfa_required');
+  assert.equal(Object.hasOwn(auth, 'password'), false);
+  assert.equal(Object.hasOwn(auth, 'username'), false);
 });
