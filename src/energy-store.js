@@ -3,54 +3,79 @@
 const fs = require('fs');
 const path = require('path');
 
+function emptyTotals() {
+  return { daily: {}, monthly: {}, yearly: {} };
+}
+
 class EnergyStore {
   constructor(directory, log) {
     this.directory = directory;
     this.filePath = path.join(directory, 'tapo-energy-history.json');
     this.log = log;
-    this.state = { version: 1, devices: {}, totals: { daily: {}, monthly: {}, yearly: {} } };
+    this.state = { version: 2, devices: {}, totals: emptyTotals() };
     fs.mkdirSync(directory, { recursive: true });
     this.load();
   }
 
   load() {
     try {
-      if (fs.existsSync(this.filePath)) {
-        const parsed = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
-        if (parsed && parsed.version === 1 && parsed.devices && parsed.totals) this.state = parsed;
-        else this.log.warn('Energy history has an unsupported format; starting with an empty history.');
+      if (!fs.existsSync(this.filePath)) return;
+      const parsed = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+      if (!parsed || ![1, 2].includes(parsed.version) || !parsed.devices || !parsed.totals) {
+        this.log.warn('Energy history has an unsupported format; starting with an empty history.');
+        return;
+      }
+      this.state = {
+        version: 2,
+        devices: parsed.devices,
+        totals: {
+          daily: parsed.totals.daily || {},
+          monthly: parsed.totals.monthly || {},
+          yearly: parsed.totals.yearly || {}
+        }
+      };
+      for (const device of Object.values(this.state.devices)) {
+        device.totals = device.totals || emptyTotals();
+        device.energyWh = Number.isFinite(device.energyWh) ? device.energyWh : 0;
       }
     } catch (error) {
       this.log.error('Could not read energy history: %s', error.message);
     }
   }
 
-  recordPower(deviceId, powerW, timestamp = Date.now()) {
-    if (!Number.isFinite(powerW) || powerW < 0) return;
-    const previous = this.state.devices[deviceId];
-    if (previous && Number.isFinite(previous.powerW) && Number.isFinite(previous.timestamp) && timestamp > previous.timestamp) {
+  recordPower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
+    if (typeof deviceId !== 'string' || !deviceId.trim()) return;
+    if (!Number.isFinite(powerW) || powerW < 0 || !Number.isFinite(timestamp)) return;
+
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals() };
+    let energyWh = 0;
+    if (Number.isFinite(previous.powerW) && Number.isFinite(previous.timestamp) && timestamp > previous.timestamp) {
       const elapsedMs = Math.min(timestamp - previous.timestamp, 6 * 60 * 60 * 1000);
-      const energyWh = ((previous.powerW + powerW) / 2) * elapsedMs / 3600000;
-      this.addEnergy(new Date(timestamp), energyWh);
-      if (!previous.energyWh) previous.energyWh = 0;
-      previous.energyWh += energyWh;
+      energyWh = ((previous.powerW + powerW) / 2) * elapsedMs / 3600000;
+      this.addEnergy(new Date(timestamp), energyWh, this.state.totals);
+      this.addEnergy(new Date(timestamp), energyWh, previous.totals);
     }
+
     this.state.devices[deviceId] = {
-      ...(previous || {}),
+      ...previous,
+      id: deviceId,
+      name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
+      model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
       powerW,
       timestamp,
-      energyWh: previous?.energyWh || 0
+      energyWh: previous.energyWh + energyWh,
+      totals: previous.totals
     };
     this.save();
   }
 
-  addEnergy(date, energyWh) {
-    // Use the Homebridge host's local calendar date, not UTC, for daily buckets.
+  addEnergy(date, energyWh, totals) {
+    // Use the Homebridge host's local calendar date for reporting buckets.
     const year = String(date.getFullYear());
     const month = year + '-' + String(date.getMonth() + 1).padStart(2, '0');
     const day = month + '-' + String(date.getDate()).padStart(2, '0');
     for (const [period, key] of [['daily', day], ['monthly', month], ['yearly', year]]) {
-      this.state.totals[period][key] = (this.state.totals[period][key] || 0) + energyWh;
+      totals[period][key] = (totals[period][key] || 0) + energyWh;
     }
   }
 
