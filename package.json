@@ -4,6 +4,7 @@
   "description": "Local Tapo energy monitoring and consumption history for Homebridge",
   "main": "index.js",
   "scripts": {
+    "test": "node --test",
     "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js"
   },
   "keywords": [
@@ -27,5 +28,19 @@
     "homebridge": {
       "optional": true
     }
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "config.schema.json",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vitva/homebridge-tapo-energy-monitor.git"
+  },
+  "homepage": "https://github.com/vitva/homebridge-tapo-energy-monitor",
+  "bugs": {
+    "url": "https://github.com/vitva/homebridge-tapo-energy-monitor/issues"
   }
 }
