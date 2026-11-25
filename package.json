@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/matter-meter.js && node --check src/tapo-cloud.js && node --check src/tapo-thing-api.js && node --check test/energy-store.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check test/tapo-cloud.test.js && node --check test/tapo-thing-api.test.js && node --check homebridge-ui/server.js"
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/matter-meter.js && node --check src/tapo-cloud.js && node --check src/tapo-cloud-auth.js && node --check src/tapo-thing-api.js && node --check test/energy-store.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check test/tapo-cloud.test.js && node --check test/tapo-cloud-auth.test.js && node --check test/tapo-thing-api.test.js && node --check homebridge-ui/server.js"
   },
   "keywords": [
     "homebridge-plugin",
