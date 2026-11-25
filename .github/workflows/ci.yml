@@ -19,8 +19,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm install --ignore-scripts
-      - name: Install current Homebridge 2
-        run: npm install --no-save --no-package-lock homebridge@2.5.0
       - run: npm test
       - run: npm run lint
       - name: Verify Homebridge 2 ESM plugin loading
