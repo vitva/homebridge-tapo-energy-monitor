@@ -13,7 +13,7 @@ test('cloud probe parses the helper JSON response', async () => {
     child.stderr = new PassThrough();
     child.stdin = new PassThrough();
     child.kill = () => {};
-    child.stdin.on('end', () => {
+    child.stdin.on('finish', () => {
       process.nextTick(() => {
         child.stdout.end(JSON.stringify({ ok: true, authenticated: true, deviceCount: 0, devices: [] }));
         child.emit('close', 0);
@@ -33,7 +33,7 @@ test('cloud probe rejects invalid helper output', async () => {
     child.stderr = new PassThrough();
     child.stdin = new PassThrough();
     child.kill = () => {};
-    child.stdin.on('end', () => {
+    child.stdin.on('finish', () => {
       process.nextTick(() => {
         child.stdout.end('invalid');
         child.emit('close', 0);
