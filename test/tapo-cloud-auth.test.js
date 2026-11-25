@@ -75,6 +75,66 @@ test('performs regional discovery and login using the bundled TP-Link CA', async
   assert.ok(fs.existsSync(path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')));
 });
 
+test('discovers and validates the regional Thing API service host', async () => {
+  let captured;
+  const request = (url, options, callback) => {
+    captured = { url: new URL(String(url)), options };
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify({
+        error_code: 0,
+        result: {
+          serviceList: [
+            { serviceId: 'nbu.iot-cloud-gateway.app-v2', serviceUrl: 'https://gateway-app-server.iot.i.tplinkcloud.com' },
+            { serviceId: 'nbu.iot-app-server.app-v2', serviceUrl: 'https://eu-app-server.iot.i.tplinkcloud.com' }
+          ]
+        }
+      }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, termId: 'test-terminal' });
+  auth.host = 'https://eu1.tplinkcloud.com';
+  const host = await auth.discoverThingService('test@example.com', 'test-session-token');
+  assert.equal(host, 'https://eu-app-server.iot.i.tplinkcloud.com');
+  assert.equal(captured.url.pathname, '/api/v2/common/getAppServiceUrlByCloudUserName');
+  assert.equal(captured.url.searchParams.get('appVer'), '3.13.818');
+  assert.equal(captured.url.searchParams.get('token'), 'test-session-token');
+  assert.equal(captured.options.method, 'POST');
+  assert.equal(captured.options.rejectUnauthorized, true);
+});
+
+test('rejects an unsafe Thing service URL returned by cloud discovery', async () => {
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify({
+        error_code: 0,
+        result: { serviceList: [
+          { serviceId: 'nbu.iot-app-server.app-v2', serviceUrl: 'https://attacker.example' }
+        ] }
+      }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, termId: 'test-terminal' });
+  auth.host = 'https://eu1.tplinkcloud.com';
+  await assert.rejects(
+    auth.discoverThingService('test@example.com', 'test-session-token'),
+    /invalid Thing API host/
+  );
+});
+
 test('returns an MFA challenge without retaining account credentials', async () => {
   const replies = [
     { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } },
