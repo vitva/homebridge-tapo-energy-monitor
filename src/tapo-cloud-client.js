@@ -57,6 +57,7 @@ async function probeTapoThingCloud(options = {}) {
     const host = await auth.discoverThingService(username, login.token);
     diagnostic(diagnostics, 'thing_service', 'success', stageStarted);
 
+    stageStarted = Date.now();
     const api = (options.apiFactory || (args => new TapoThingApi(args)))({
       host,
       token: login.token,
