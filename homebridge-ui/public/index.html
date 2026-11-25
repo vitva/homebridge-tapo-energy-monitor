@@ -34,7 +34,8 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Пароль и MFA-код используются только для этой проверки и не сохраняются в настройках плагина.</p>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Пароль и MFA-код используются только для этой проверки и не сохраняются в настройках плагина. Python остаётся контрольным вариантом; Node.js — дополнительный экспериментальный транспорт.</p>
+  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="python">Python · контрольный вариант</option><option value="node">Node.js · экспериментальный вариант</option></select></div>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
@@ -164,7 +165,8 @@
         username: byId('tapo-email').value,
         password: byId('tapo-password').value,
         mfaCode: byId('tapo-mfa').value,
-        pythonExecutable: tapoCloudPython
+        pythonExecutable: tapoCloudPython,
+        transport: byId('tapo-transport').value
       });
       status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
       const alert = document.createElement('div');
