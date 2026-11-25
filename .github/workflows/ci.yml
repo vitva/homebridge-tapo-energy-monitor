@@ -52,7 +52,7 @@ jobs:
           npm init -y >/dev/null
           npm install --ignore-scripts "$PACKAGE" homebridge@2.5.0
           mkdir -p "$RUNNER_TEMP/homebridge-data"
-          cat > "$RUNNER_TEMP/homebridge-config.json" <<'JSON'
+          cat > "$RUNNER_TEMP/homebridge-data/config.json" <<'JSON'
           {
             "bridge": {
               "name": "Tapo Energy Isolated Runtime",
@@ -73,7 +73,6 @@ jobs:
           set +e
           timeout 20s ./node_modules/.bin/homebridge \
             -U "$RUNNER_TEMP/homebridge-data" \
-            -C "$RUNNER_TEMP/homebridge-config.json" \
             > "$RUNNER_TEMP/homebridge-runtime.log" 2>&1
           EXIT_CODE=$?
           set -e
@@ -83,7 +82,7 @@ jobs:
             exit 1
           fi
           grep -q "Simulation is disabled" "$RUNNER_TEMP/homebridge-runtime.log"
-          grep -q "Homebridge is running" "$RUNNER_TEMP/homebridge-runtime.log"
+          grep -q "is running on port" "$RUNNER_TEMP/homebridge-runtime.log"
       - run: python3 -m py_compile helpers/tapo_cloud_probe.py
       - run: python3 -m unittest discover -s helpers -p 'test_*.py'
       - if: matrix.node-version == 26
