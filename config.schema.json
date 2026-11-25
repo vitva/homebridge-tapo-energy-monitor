@@ -2,8 +2,8 @@
   "pluginAlias": "TapoEnergyMonitor",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Multi-device simulator. All readings are simulated; real Tapo communication is not implemented.",
-  "footerDisplay": "Data is stored locally on the Homebridge host. Optional Matter export publishes the simulated aggregate as estimated energy.",
+  "headerDisplay": "Tapo cloud diagnostic plus energy-history prototype. The cloud test uses TP-Link account login; live P110M telemetry is not yet enabled for aggregation.",
+  "footerDisplay": "The cloud diagnostic is read-only. Account credentials entered in the custom UI are not stored in plugin settings.",
   "schema": {
     "type": "object",
     "properties": {
@@ -111,6 +111,12 @@
             "powerW": 60
           }
         ]
+      },
+      "tapoCloudPython": {
+        "title": "Python executable for Tapo cloud",
+        "type": "string",
+        "default": "python3",
+        "description": "Use python3 or an absolute path to a Python 3.10+ virtual-environment interpreter."
       }
     },
     "required": [
