@@ -1,6 +1,6 @@
 # homebridge-tapo-energy-monitor
 
-A separate Homebridge plugin project for local Tapo energy monitoring and combined consumption history.
+A Homebridge 2 Matter platform for Tapo energy monitoring and combined consumption history. The required transport is TP-Link Tapo cloud; the plugin does not require the Homebridge host to share a LAN with the devices.
 
 ## Current status — 0.2.0 Matter prototype
 
@@ -72,6 +72,23 @@ This is a connectivity diagnostic, not production polling. A successful login an
 
 P110M cloud discovery and the read-only `/usage` diagnostic are implemented; scheduled aggregation remains unconnected until its returned values are verified. S112 and S110E cloud support remains unimplemented. When verified real counters are available, they will be exposed separately from estimates; they will not be added twice to the same total.
 
+## Homebridge setup and safe defaults
+
+Add the **Tapo Energy Monitor** platform in Homebridge UI. The platform is idle by default: **Simulation mode** is off and no demo devices are created automatically. It does not start polling or publish a Matter accessory until simulation is explicitly enabled and at least one device row is configured. For a test run, enable **Simulation mode** and add one row per test device. IDs must be unique and stable across restarts.
+
+All persistent history is written under the Homebridge storage directory returned by the Homebridge API. There is no custom external data-directory setting.
+
+## Compatibility and verification preparation
+
+- Homebridge 2.2.0 or later; the CI loader check currently uses Homebridge 2.5.0.
+- Node.js 22, 24, and 26 are tested in CI.
+- The package declares `supports-matter` only because it registers a Matter Electrical Sensor directly and does not publish HAP accessories.
+- No install or post-install script modifies the Homebridge host.
+- No analytics or telemetry is included.
+- GitHub issues are enabled and the source is public.
+
+The plugin is **not yet ready to submit for Verified By Homebridge review**: production cloud polling and verified real-device energy aggregation are not implemented, and the current Tapo cloud check still uses an optional Python helper. The verification request also requires an npm-published release and release notes. Do not describe the plugin as verified or submit a request until those gaps are closed.
+
 ## Development
 
 ```sh
@@ -79,8 +96,6 @@ npm install
 npm test
 npm run lint
 ```
-
-Add the **Tapo Energy Monitor** platform in Homebridge UI. Keep **Simulation mode** enabled. In **Simulated devices**, add one row per test device. IDs must be unique and stable across restarts.
 
 To test Matter export, enable Matter for the Homebridge bridge that hosts this platform and leave **Publish Matter energy sensor** enabled. Do not pair the HAP code when testing this Matter sensor.
 
