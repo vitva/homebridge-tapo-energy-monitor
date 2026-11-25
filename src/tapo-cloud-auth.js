@@ -105,6 +105,7 @@ class TapoCloudAuth {
   constructor(options = {}) {
     this.request = options.request || https.request;
     this.timeoutMs = options.timeoutMs;
+    this.onDiagnostic = typeof options.onDiagnostic === 'function' ? options.onDiagnostic : null;
     this.termId = options.termId || crypto.randomUUID();
     this.host = TAPO_HOST;
     this.query = {
@@ -133,6 +134,13 @@ class TapoCloudAuth {
     });
   }
 
+  report(stage, status, startedAt, details = {}) {
+    if (!this.onDiagnostic) return;
+    const safe = {};
+    if (Number.isInteger(details.code)) safe.code = details.code;
+    this.onDiagnostic({ stage, status, durationMs: Math.max(0, Date.now() - startedAt), ...safe });
+  }
+
   async login(options = {}) {
     const username = typeof options.username === 'string' ? options.username.trim() : '';
     const password = typeof options.password === 'string' ? options.password : '';
@@ -144,14 +152,20 @@ class TapoCloudAuth {
       return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
     }
 
+    let stage = 'regional_server';
+    let stageStarted = Date.now();
     try {
       const status = await this.post(TAPO_HOST, PATHS.accountStatus, {
         appType: APP_TYPE,
         cloudUserName: username
       });
       if (Number(status.error_code) !== 0) {
+        this.report(stage, 'failed', stageStarted, { code: Number(status.error_code) });
         return { ok: false, code: 'cloud_error', message: 'Не удалось определить региональный сервер TP-Link.' };
       }
+      this.report(stage, 'success', stageStarted);
+      stage = 'authentication';
+      stageStarted = Date.now();
       const regionalHost = validateCloudBase(status.result?.appServerUrl || TAPO_HOST);
       this.host = regionalHost;
       const loginBody = {
@@ -170,6 +184,7 @@ class TapoCloudAuth {
       const loginCode = Number(login.error_code);
       if (loginCode === -20677) {
         if (!mfaCode) {
+          this.report(stage, 'required', stageStarted, { code: loginCode });
           return { ok: false, code: 'mfa_required', message: 'TP-Link запросил код подтверждения. Введите свежий код из письма.' };
         }
         const verified = await this.post(regionalHost, PATHS.mfa, {
@@ -180,18 +195,24 @@ class TapoCloudAuth {
           terminalUUID: this.termId
         });
         if (Number(verified.error_code) !== 0) {
+          this.report(stage, 'failed', stageStarted, { code: Number(verified.error_code) });
           return { ok: false, code: 'mfa_failed', message: 'TP-Link не принял код подтверждения. Проверьте код и повторите попытку.' };
         }
+        this.report(stage, 'success', stageStarted);
         return this.authResult(verified.result, regionalHost);
       }
       if (loginCode === -20601 || loginCode === -20675) {
+        this.report(stage, 'failed', stageStarted, { code: loginCode });
         return { ok: false, code: 'auth_failed', message: 'TP-Link отклонил логин или пароль. Проверьте данные аккаунта.' };
       }
       if (loginCode !== 0) {
+        this.report(stage, 'failed', stageStarted, { code: loginCode });
         return { ok: false, code: 'cloud_error', message: 'TP-Link не завершил авторизацию (код ' + loginCode + ').' };
       }
+      this.report(stage, 'success', stageStarted);
       return this.authResult(login.result, regionalHost);
     } catch {
+      this.report(stage, 'failed', stageStarted);
       return { ok: false, code: 'cloud_error', message: 'Не удалось безопасно подключиться к облаку TP-Link.' };
     }
   }
