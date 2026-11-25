@@ -105,3 +105,78 @@ test('rejects missing credentials before cloud calls', async () => {
   const result = await probeTapoThingCloud({ username: '', password: '' });
   assert.equal(result.code, 'credentials_required');
 });
+
+
+test('reports rejected MFA codes without exposing account credentials', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'private@example.com',
+    password: 'never-return-this-password',
+    mfaCode: '654321',
+    auth: {
+      async login(input) {
+        assert.equal(input.username, 'private@example.com');
+        assert.equal(input.password, 'never-return-this-password');
+        assert.equal(input.mfaCode, '654321');
+        return {
+          ok: false,
+          code: 'mfa_failed',
+          message: 'TP-Link не принял код подтверждения.'
+        };
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'mfa_failed');
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
+    ['authentication', 'failed']
+  ]);
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes('never-return-this-password'), false);
+  assert.equal(serialized.includes('654321'), false);
+  assert.equal(serialized.includes('private@example.com'), false);
+});
+
+test('reports rejected account credentials as an authentication failure', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'private@example.com',
+    password: 'never-return-this-password',
+    auth: {
+      async login() {
+        return {
+          ok: false,
+          code: 'auth_failed',
+          message: 'TP-Link отклонил логин или пароль.'
+        };
+      }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'auth_failed');
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
+    ['authentication', 'failed']
+  ]);
+  assert.equal(JSON.stringify(result).includes('never-return-this-password'), false);
+});
+
+test('attributes Thing service discovery failures to the correct stage', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'private@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 'session-secret', termId: 'term' }; },
+      async discoverThingService() { throw new Error('private transport details'); }
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'thing_api_error');
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
+    ['authentication', 'success'],
+    ['thing_service', 'failed']
+  ]);
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes('session-secret'), false);
+  assert.equal(serialized.includes('private transport details'), false);
+});
