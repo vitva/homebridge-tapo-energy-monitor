@@ -19,12 +19,8 @@ function createEstimatedMeterAccessory(api, displayName = 'Tapo Energy — Ра�
     serialNumber: 'TAPO-ENERGY-ESTIMATED',
     context: { meterId: METER_ID, measurementSource: 'estimated' },
     clusters: {
-      electricalPowerMeasurement: {
-        activePower: 0
-      },
-      electricalEnergyMeasurement: {
-        cumulativeEnergyImported: { energy: 0 }
-      }
+      electricalPowerMeasurement: { activePower: 0 },
+      electricalEnergyMeasurement: { cumulativeEnergyImported: { energy: 0 } }
     }
   };
 }
@@ -43,10 +39,10 @@ async function updateEstimatedMeter(api, uuid, summary) {
     .reduce((total, device) => total + (Number.isFinite(device.energyWh) ? device.energyWh : 0), 0);
 
   // Matter ElectricalPowerMeasurement uses mW; ElectricalEnergyMeasurement uses mWh.
-  await matter.updateAccessoryState(uuid, 'electricalPowerMeasurement', {
-    activePower: Math.round(activePowerW * 1000)
-  });
-  await matter.updateAccessoryState(uuid, 'electricalEnergyMeasurement', {
+  const powerCluster = matter.clusterNames?.ElectricalPowerMeasurement || 'electricalPowerMeasurement';
+  const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
+  await matter.updateAccessoryState(uuid, powerCluster, { activePower: Math.round(activePowerW * 1000) });
+  await matter.updateAccessoryState(uuid, energyCluster, {
     cumulativeEnergyImported: { energy: Math.round(cumulativeEnergyWh * 1000) }
   });
 
