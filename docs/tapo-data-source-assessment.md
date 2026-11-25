@@ -6,7 +6,9 @@ Updated: 2026-11-25 (verified against tapo 0.13.0 API docs)
 
 The user requires **Tapo account/cloud access only**. The Homebridge host may be outside the dacha LAN. Do not implement local-IP polling as a fallback or prerequisite.
 
-A newer reverse-engineered project, `piekstra/tplink-cloud-cli` (`tplc`), documents the private TP-Link v2 account API and a Tapo cloud passthrough. For Tapo, the cloud request is sent to `/api/v2/common/passthrough` with `deviceId` and a JSON-string `requestData`; the cloud relays the device protocol request and returns `responseData`. The documented examples include read-only `emeter.get_realtime`. The CLI's energy support table explicitly lists P110 (not P110M) for realtime and daily/monthly data. This establishes a plausible cloud-only route, but does not establish P110M compatibility.
+A separate reverse-engineered project, `yude/tplink-tapo-power-grafana-cloud`, documents the newer Tapo Thing Cloud API used for P110M. It authenticates through the TP-Link account API, resolves the Thing API service endpoint, lists devices with `GET /v2/things`, and reads energy through `GET /v1/things/{thingName}/usage`. Its documentation describes current usage and hourly/daily/monthly history in that response. This gives the plugin a concrete cloud-only P110M route to test. It remains unofficial and has not yet been verified against the user's account.
+
+The older `piekstra/tplink-cloud-cli` passthrough route is a separate alternative, and its published energy support table explicitly lists P110 but not P110M. It is not the primary P110M route.
 
 The data collector must therefore support a cloud adapter and report the provenance of every value:
 
@@ -60,6 +62,7 @@ This code has not yet been exercised against the user's TP-Link account or P110M
 
 ## Sources reviewed
 
+- Tapo Thing Cloud API research implementation and documented `/usage` endpoint: https://github.com/yude/tplink-tapo-power-grafana-cloud
 - TP-Link support: P110M history cannot be downloaded while the device is offline; history retention up to one year: https://community.tp-link.com/en/smart-home/forum/topic/703462
 - Tapo community API client and supported-device matrix: https://github.com/mihai-dinculescu/tapo
 - P110M energy-history API capabilities: https://github.com/mihai-dinculescu/tapo/issues/645
