@@ -1,0 +1,143 @@
+<div class="container-fluid p-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <div>
+      <h3 class="mb-1">Tapo Energy Monitor</h3>
+      <div class="text-muted small">Local energy history · prototype / simulated readings</div>
+    </div>
+    <button id="refresh" class="btn btn-primary">Refresh</button>
+  </div>
+
+  <div id="status" class="alert alert-secondary" role="status">Loading local energy history…</div>
+  <div id="dashboard" hidden>
+    <div class="row g-3 mb-3">
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Current combined power</div><div class="fs-3 fw-semibold" id="power">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Today · combined</div><div class="fs-3 fw-semibold" id="today">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Devices in history</div><div class="fs-3 fw-semibold" id="count">—</div></div></div></div>
+    </div>
+
+    <h5 class="mt-4">Devices</h5>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Device</th><th>Model</th><th class="text-end">Power</th><th class="text-end">Estimated total</th><th class="text-end">Today</th></tr></thead>
+        <tbody id="devices"></tbody>
+      </table>
+    </div>
+
+    <h5 class="mt-4">Combined consumption history</h5>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th>Period</th><th class="text-end">Energy</th></tr></thead>
+        <tbody id="periods"></tbody>
+      </table>
+    </div>
+    <div class="text-muted small" id="updated"></div>
+  </div>
+  <hr class="my-4">
+  <h5>Platform settings</h5>
+  <p class="text-muted small">Configure simulation devices and polling below. Real Tapo connections are not active in this prototype.</p>
+  <div id="settings-form"></div>
+</div>
+
+<script>
+(() => {
+  const byId = (id) => document.getElementById(id);
+  const number = (value, digits = 2) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: digits });
+  const localDay = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  let dataDirectory = '';
+
+  function showMessage(message, type = 'secondary') {
+    const status = byId('status');
+    status.className = 'alert alert-' + type;
+    status.textContent = message;
+    status.hidden = false;
+  }
+
+  function row(label, value) {
+    const tr = document.createElement('tr');
+    const left = document.createElement('td');
+    const right = document.createElement('td');
+    left.textContent = label;
+    right.textContent = value;
+    right.className = 'text-end';
+    tr.append(left, right);
+    return tr;
+  }
+
+  async function refresh() {
+    byId('refresh').disabled = true;
+    try {
+      const result = await homebridge.request('/summary', { dataDirectory });
+      if (!result.available) {
+        byId('dashboard').hidden = true;
+        showMessage(result.message || 'No readings recorded yet.');
+        return;
+      }
+
+      const data = result.data;
+      const devices = Object.values(data.devices || {});
+      const todayKey = localDay();
+      const todayWh = data.totals?.daily?.[todayKey] || 0;
+      const currentPower = devices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
+      byId('power').textContent = number(currentPower, 1) + ' W';
+      byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
+      byId('count').textContent = String(devices.length);
+
+      const body = byId('devices');
+      body.replaceChildren();
+      devices.sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)));
+      for (const device of devices) {
+        const tr = document.createElement('tr');
+        const name = document.createElement('td'); name.textContent = device.name || device.id;
+        const model = document.createElement('td'); model.textContent = device.model || '—';
+        const power = document.createElement('td'); power.className = 'text-end'; power.textContent = number(device.powerW, 1) + ' W';
+        const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
+        const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[todayKey] || 0) / 1000, 3) + ' kWh';
+        tr.append(name, model, power, total, daily); body.append(tr);
+      }
+
+      const periods = byId('periods');
+      periods.replaceChildren();
+      const date = new Date();
+      const monthKey = todayKey.slice(0, 7);
+      const yearKey = todayKey.slice(0, 4);
+      periods.append(
+        row('Today (' + todayKey + ')', number(todayWh / 1000, 3) + ' kWh'),
+        row('This month (' + monthKey + ')', number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh'),
+        row('This year (' + yearKey + ')', number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh')
+      );
+      byId('updated').textContent = 'History file updated: ' + new Date(result.updatedAt).toLocaleString();
+      byId('dashboard').hidden = false;
+      showMessage('History loaded from the Homebridge host. Energy values are estimates from power samples.', 'success');
+    } catch (error) {
+      byId('dashboard').hidden = true;
+      showMessage('Could not load history: ' + error.message, 'danger');
+    } finally {
+      byId('refresh').disabled = false;
+    }
+  }
+
+  async function init() {
+    try {
+      const config = await homebridge.getPluginConfig();
+      const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
+      dataDirectory = platform && typeof platform.dataDirectory === 'string' ? platform.dataDirectory : '';
+      homebridge.showSchemaForm();
+      homebridge.addEventListener('configChanged', (event) => {
+        const updated = event.data || [];
+        const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
+        dataDirectory = current && typeof current.dataDirectory === 'string' ? current.dataDirectory : '';
+      });
+      await refresh();
+      window.setInterval(refresh, 15000);
+    } catch (error) {
+      showMessage('Homebridge UI initialization failed: ' + error.message, 'danger');
+    }
+  }
+
+  byId('refresh').addEventListener('click', refresh);
+  homebridge.addEventListener('ready', init);
+})();
+</script>
