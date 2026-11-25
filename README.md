@@ -27,16 +27,20 @@ Matter power is sent in milliwatts (mW); cumulative energy is sent in milliwatt-
 
 ## Data-source architecture decision
 
-TP-Link account login and Tapo cloud device discovery are not the same as cloud energy telemetry. The reviewed cloud client documents Tapo discovery/basic control, but no verified Tapo cloud energy-history endpoint for P110M, S112 or S110E. TP-Link support also confirms that P110M history cannot be downloaded while the device is offline.
+The required transport is **TP-Link Tapo account/cloud only**. The plugin must not require the Homebridge server to share a LAN with the dacha devices, and it must not fall back to direct-IP/local polling.
+
+A reverse-engineered cloud client, `tplc`, documents Tapo account authentication, device discovery and a cloud-to-device passthrough. Its read-only energy commands list P110, but do not yet list P110M, S112 or S110E. The passthrough documentation shows that the Tapo cloud can relay device-protocol requests such as `emeter.get_realtime`; this gives us a concrete route to test with P110M without local network access. Exact P110M history commands and the S112/S110E data shapes remain unverified.
 
 The implementation plan is therefore:
-- use account/cloud discovery only as an optional device-inventory source;
-- retrieve P110M live values and history through its supported device API when reachable on the LAN;
-- keep S112 and S110E unsupported for real readings until their model-specific API responses are verified;
-- label every value by source (real device history, real meter counter, estimated from power, or unavailable);
-- never fill missing/offline periods with invented values or mix real counters with estimates.
+- authenticate to the TP-Link/Tapo account and discover devices through the Tapo cloud;
+- use cloud passthrough for read-only live power and, if verified, history/counter queries;
+- test P110M first; do not assume P110 support automatically means P110M support;
+- keep S112 and S110E readings unavailable until their cloud-relayed model-specific responses are verified;
+- store credentials/tokens server-side only; never expose them to the browser or logs;
+- label every value by source (cloud device history, cloud meter counter, estimated from power, or unavailable);
+- never fill missing/offline periods with invented values or mix real and estimated values.
 
-See [the data-source capability assessment](docs/tapo-data-source-assessment.md) for the evidence and adapter plan.
+The cloud route is unofficial/reverse-engineered and may change if TP-Link changes its private API. P110M history is not guaranteed to be available while the plug is offline.
 
 ## Planned physical devices
 
