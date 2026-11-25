@@ -117,7 +117,7 @@ async function probeTapoThingCloud(options = {}) {
       code: 'thing_api_error',
       authenticated: true,
       message: 'Вход в аккаунт выполнен, но получить данные Thing Cloud API не удалось.',
-      detail: error?.message || 'Unknown Thing API error',
+      detail: 'Проверьте этап диагностики выше и повторите проверку.',
       diagnostics
     };
   }
