@@ -2,6 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { TapoEnergyMonitorPlatform } = require('../src/platform');
 
 function makePlatform(config, matter) {
@@ -58,4 +61,40 @@ test('allows Matter export to be disabled in plugin settings', async () => {
   await platform.registerMatterMeter();
   assert.equal(platform.matterMeterUuid, null);
   assert.equal(warnings.length, 0);
+});
+
+
+test('does not start when simulation is not explicitly enabled', async () => {
+  const { platform, warnings } = makePlatform({}, undefined);
+  await platform.start();
+  assert.equal(platform.store, null);
+  assert.equal(platform.timer, null);
+  assert.match(warnings[0], /Simulation is disabled/);
+});
+
+test('does not start simulation without an explicitly configured device', async () => {
+  const { platform, warnings } = makePlatform({ simulationMode: true }, undefined);
+  await platform.start();
+  assert.equal(platform.store, null);
+  assert.equal(platform.timer, null);
+  assert.match(warnings[0], /No simulated devices configured/);
+});
+
+test('stores history only in the Homebridge storage directory', async () => {
+  const storagePath = fs.mkdtempSync(path.join(os.tmpdir(), 'tapo-energy-homebridge-'));
+  const { platform } = makePlatform({
+    simulationMode: true,
+    pollingIntervalSeconds: 3600,
+    simulatedDevices: [{ id: 'test-device', name: 'Test device', model: 'P110M', powerW: 100 }]
+  }, undefined);
+  platform.api.user = { storagePath: () => storagePath };
+  try {
+    await platform.start();
+    assert.equal(platform.store.directory, storagePath);
+    assert.equal(fs.existsSync(path.join(storagePath, 'tapo-energy-history.json')), true);
+    assert.ok(platform.timer);
+  } finally {
+    if (platform.timer) clearInterval(platform.timer);
+    fs.rmSync(storagePath, { recursive: true, force: true });
+  }
 });
