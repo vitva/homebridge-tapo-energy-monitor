@@ -5,16 +5,48 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/matter-meter.js && node --check test/energy-store.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check homebridge-ui/server.js"
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/matter-meter.js && node --check src/tapo-cloud.js && node --check test/energy-store.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check homebridge-ui/server.js"
   },
-  "keywords": ["homebridge-plugin", "tapo", "energy-monitor", "matter", "p110m", "s112", "s110e"],
-  "engines": { "node": ">=18.15.0", "homebridge": ">=1.8.0" },
-  "dependencies": { "@homebridge/plugin-ui-utils": "^2.3.0" },
+  "keywords": [
+    "homebridge-plugin",
+    "tapo",
+    "energy-monitor",
+    "matter",
+    "p110m",
+    "s112",
+    "s110e"
+  ],
+  "engines": {
+    "node": ">=18.15.0",
+    "homebridge": ">=1.8.0"
+  },
+  "dependencies": {
+    "@homebridge/plugin-ui-utils": "^2.3.0"
+  },
   "devDependencies": {},
-  "peerDependencies": { "homebridge": ">=1.8.0" },
-  "peerDependenciesMeta": { "homebridge": { "optional": true } },
-  "files": ["index.js", "src/", "config.schema.json", "README.md", "homebridge-ui/"],
-  "repository": { "type": "git", "url": "https://github.com/vitva/homebridge-tapo-energy-monitor.git" },
+  "peerDependencies": {
+    "homebridge": ">=1.8.0"
+  },
+  "peerDependenciesMeta": {
+    "homebridge": {
+      "optional": true
+    }
+  },
+  "files": [
+    "index.js",
+    "src/",
+    "helpers/",
+    "config.schema.json",
+    "README.md",
+    "requirements-cloud.txt",
+    "homebridge-ui/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vitva/homebridge-tapo-energy-monitor.git"
+  },
   "homepage": "https://github.com/vitva/homebridge-tapo-energy-monitor",
-  "bugs": { "url": "https://github.com/vitva/homebridge-tapo-energy-monitor/issues" }
+  "bugs": {
+    "url": "https://github.com/vitva/homebridge-tapo-energy-monitor/issues"
+  }
 }
