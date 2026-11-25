@@ -44,16 +44,17 @@ The cloud route is unofficial/reverse-engineered and may change if TP-Link chang
 
 ### Tapo cloud diagnostic (read-only)
 
-The custom Homebridge UI includes a **Проверка облака TP-Link Tapo** panel. It:
+The custom Homebridge UI includes a **Проверка облака TP-Link Tapo** panel with two selectable transports: **Python (reference implementation)** and **Node.js (experimental)**. Both use the Tapo cloud only; the Node.js option implements Tapo V2 account authentication directly and does not require Python. It:
 - logs in to the Tapo cloud only (no Kasa login, device IP or dacha LAN access);
-- supports an email MFA code when TP-Link requests one;
+- requests an email MFA code only when TP-Link actually challenges the login; the code field stays hidden otherwise;
+- displays a safe stage report (status, elapsed time and numeric API error code) without passwords, MFA codes or session tokens; the Node.js transport separates regional server discovery from account authentication, while the Python library reports login as one combined stage;
 - lists devices returned by the Tapo cloud account;
 - discovers devices through the Tapo Thing API and requests the read-only `/usage` resource for discovered P110M devices;
 - never sends relay, power, reboot, reset or configuration commands.
 
-The email, password and MFA code are submitted to the local Homebridge UI server over its plugin request channel, passed to the helper over stdin, and are not written to plugin settings or logs. The cloud session token is held only in the short-lived diagnostic process and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
+The email, password and optional MFA code are submitted to the local Homebridge UI server over its plugin request channel and are not written to plugin settings or diagnostic output. The Python transport passes credentials to its helper over stdin; the experimental Node.js transport keeps them in the in-memory request flow. The cloud session token is held only for the short-lived diagnostic request and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
 
-The helper requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path:
+The Python reference transport requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path. The experimental Node.js transport does not require this Python environment:
 
 ```sh
 python3 -m venv /path/to/tapo-cloud-venv
