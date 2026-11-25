@@ -4,7 +4,7 @@ A separate Homebridge plugin project for local Tapo energy monitoring and combin
 
 ## Current status — 0.2.0 Matter prototype
 
-**Simulation only. Real Tapo communication is not implemented.** The prototype:
+**Energy aggregation is still simulation-only.** A separate read-only Tapo cloud diagnostic is now available in the custom UI; its P110M result is not yet connected to the history aggregator. The prototype:
 - registers a Homebridge dynamic platform;
 - provides a custom Homebridge UI dashboard with combined power, per-device readings, and daily/monthly/yearly estimates;
 - accepts multiple simulated devices with unique IDs, names, model labels, and power values;
@@ -41,6 +41,28 @@ The implementation plan is therefore:
 - never fill missing/offline periods with invented values or mix real and estimated values.
 
 The cloud route is unofficial/reverse-engineered and may change if TP-Link changes its private API. P110M history is not guaranteed to be available while the plug is offline.
+
+### Tapo cloud diagnostic (read-only)
+
+The custom Homebridge UI includes a **Проверка облака TP-Link Tapo** panel. It:
+- logs in to the Tapo cloud only (no Kasa login, device IP or dacha LAN access);
+- supports an email MFA code when TP-Link requests one;
+- lists devices returned by the Tapo cloud account;
+- for discovered P110M devices, tries the read-only `emeter.get_realtime` passthrough command;
+- never sends relay, power, reboot, reset or configuration commands.
+
+The email, password and MFA code are submitted to the local Homebridge UI server over its plugin request channel, passed to the helper over stdin, and are not written to plugin settings or logs. The cloud session token is held only in the short-lived diagnostic process and is not persisted.
+
+The helper requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path:
+
+```sh
+python3 -m venv /path/to/tapo-cloud-venv
+/path/to/tapo-cloud-venv/bin/pip install -r /path/to/homebridge-tapo-energy-monitor/requirements-cloud.txt
+```
+
+For example, the configured executable would be `/path/to/tapo-cloud-venv/bin/python`. The venv and package must exist in the same container/filesystem where Homebridge runs.
+
+This is a connectivity diagnostic, not production polling. A successful account login does not prove P110M energy support. The device-specific response must be verified first; only then can live values and history be wired into the store.
 
 ## Planned physical devices
 
