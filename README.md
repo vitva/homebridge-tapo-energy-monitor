@@ -17,9 +17,10 @@ The Matter sensor is deliberately named **Tapo Energy — Расчётная**. 
 ### Matter requirements and limitations
 
 - Homebridge 2.2.0 or later, with Matter enabled on the bridge hosting this platform.
-- Apple Home on iOS/tvOS 27 or later for the current energy-monitoring interface.
+- Apple Home on iOS/tvOS 27 or later for the current energy-monitoring interface. Apple has changed the Energy view across releases; bridged-device visibility may require iOS/tvOS 27.3 or later.
 - Pair the Matter-enabled Homebridge bridge using its **Matter** pairing code, not its HAP QR code.
-- Apple Home's display of bridged energy sensors depends on Apple's current Matter implementation and must be verified on the user's actual Home hub. This prototype has not yet been paired with a live Apple Home installation.
+- The plugin publishes both live active power and the cumulative-energy Matter attribute. **Apple Home may show live W without exposing the lifetime kWh value or daily/monthly/yearly history in its UI.** Those display details must be checked on the actual Apple Home version and hub. The plugin's own dashboard retains the full local history.
+- Apple Home's per-device historical usage charts are a separate feature and may depend on a supported utility account; they are not created merely by publishing Matter energy attributes.
 - If Matter is not enabled on the bridge, the plugin continues its local dashboard and logs why the Matter sensor was skipped.
 
 Matter power is sent in milliwatts (mW); cumulative energy is sent in milliwatt-hours (mWh). The local dashboard continues to show watts (W) and watt-hours (Wh).
