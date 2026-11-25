@@ -45,9 +45,10 @@ class EnergyStore {
   }
 
   addEnergy(date, energyWh) {
-    const day = date.toISOString().slice(0, 10);
-    const month = day.slice(0, 7);
-    const year = day.slice(0, 4);
+    // Use the Homebridge host's local calendar date, not UTC, for daily buckets.
+    const year = String(date.getFullYear());
+    const month = year + '-' + String(date.getMonth() + 1).padStart(2, '0');
+    const day = month + '-' + String(date.getDate()).padStart(2, '0');
     for (const [period, key] of [['daily', day], ['monthly', month], ['yearly', year]]) {
       this.state.totals[period][key] = (this.state.totals[period][key] || 0) + energyWh;
     }
