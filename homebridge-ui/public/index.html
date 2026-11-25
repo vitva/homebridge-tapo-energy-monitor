@@ -194,11 +194,33 @@
           const model = document.createElement('td'); model.textContent = device.model || '—';
           const reading = readings.get(device.id);
           const state = document.createElement('td');
-          if (reading && typeof reading.powerW === 'number') state.textContent = number(reading.powerW, 2) + ' W';
-          else if (reading && reading.error) state.textContent = reading.error;
-          else if (String(device.model || '').toUpperCase().includes('P110M')) state.textContent = 'Нет показаний';
-          else state.textContent = 'Обнаружено в облаке';
+          if (reading && reading.usage) {
+            state.textContent = 'Получен ответ Thing Cloud API';
+          } else if (reading && reading.error) {
+            state.textContent = reading.error;
+          } else if (String(device.model || '').toUpperCase().includes('P110M')) {
+            state.textContent = 'Ответ /usage не получен';
+          } else {
+            state.textContent = 'Обнаружено в облаке';
+          }
           tr.append(name, model, state); body.append(tr);
+          if (reading && reading.usage) {
+            const detailRow = document.createElement('tr');
+            const detailCell = document.createElement('td');
+            detailCell.colSpan = 3;
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Показать исходные показания и историю (' + (device.name || device.id) + ')';
+            const pre = document.createElement('pre');
+            pre.className = 'small bg-light p-2 mt-2';
+            pre.style.maxHeight = '320px';
+            pre.style.overflow = 'auto';
+            pre.textContent = JSON.stringify(reading.usage, null, 2);
+            details.append(summary, pre);
+            detailCell.append(details);
+            detailRow.append(detailCell);
+            body.append(detailRow);
+          }
         }
         table.append(body); resultBox.append(table);
         if (result.p110mCount > 0 && !(result.readings || []).some(item => typeof item.powerW === 'number')) {
