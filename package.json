@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check test/energy-store.test.js"
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check test/energy-store.test.js && node --check homebridge-ui/server.js"
   },
   "keywords": [
     "homebridge-plugin",
@@ -19,7 +19,9 @@
     "node": ">=18.15.0",
     "homebridge": ">=1.8.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@homebridge/plugin-ui-utils": "^2.3.0"
+  },
   "devDependencies": {},
   "peerDependencies": {
     "homebridge": ">=1.8.0"
@@ -34,7 +36,7 @@
     "src/",
     "config.schema.json",
     "README.md",
-    "test/"
+    "homebridge-ui/"
   ],
   "repository": {
     "type": "git",
