@@ -1,0 +1,31 @@
+{
+  "name": "homebridge-tapo-energy-monitor",
+  "version": "0.1.0",
+  "description": "Local Tapo energy monitoring and consumption history for Homebridge",
+  "main": "index.js",
+  "scripts": {
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "tapo",
+    "energy-monitor",
+    "p110m",
+    "s112",
+    "s110e"
+  ],
+  "engines": {
+    "node": ">=18.15.0",
+    "homebridge": ">=1.8.0"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "peerDependencies": {
+    "homebridge": ">=1.8.0"
+  },
+  "peerDependenciesMeta": {
+    "homebridge": {
+      "optional": true
+    }
+  }
+}
