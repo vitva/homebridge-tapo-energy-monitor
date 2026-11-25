@@ -39,6 +39,20 @@ test('skips Matter export cleanly when Matter is disabled', async () => {
   assert.match(warnings[0], /Enable Matter on this Homebridge bridge/);
 });
 
+test('keeps the local platform usable when Matter registration fails', async () => {
+  const warnings = [];
+  const matter = {
+    uuid: { generate: value => 'uuid:' + value },
+    deviceTypes: { ElectricalSensor: 'ElectricalSensorType' },
+    registerPlatformAccessories: async () => { throw new Error('Matter bridge unavailable'); }
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.log.warn = message => warnings.push(message);
+  await assert.doesNotReject(() => platform.registerMatterMeter());
+  assert.equal(platform.matterMeterUuid, null);
+  assert.match(warnings[0], /local history will continue/);
+});
+
 test('allows Matter export to be disabled in plugin settings', async () => {
   const { platform, warnings } = makePlatform({ enableMatterMeter: false }, undefined);
   await platform.registerMatterMeter();
