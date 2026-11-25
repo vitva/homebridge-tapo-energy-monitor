@@ -16,12 +16,12 @@ Request process: https://github.com/homebridge/plugins
 | GitHub release for every published version | Pending | Create a tagged GitHub release with release notes for each npm version. |
 | Node.js supported LTS versions 22, 24, 26 | Pass in CI | Matrix tests all three versions, including package build on Node 26. |
 | Successful installation | CI pass | CI installs dependencies and packs the plugin. Verify clean install from npm after first approved publication. |
-| Does not start unless configured | Pass after safe-default change | Simulation defaults off; empty simulated-device list leaves the platform idle. Add a regression test. |
+| Does not start unless configured | Pass | Simulation defaults off; empty simulated-device list leaves the platform idle. Regression tests cover both cases. |
 | No host-modifying postinstall scripts | Pass | No install/postinstall lifecycle script is defined. |
 | No TTY or non-standard startup parameters | Pass by design | Uses the standard Homebridge dynamic platform and plugin UI. |
 | Homebridge Plugin Settings GUI | Pass | Ships `config.schema.json`, custom UI entry point and UI server. |
 | No analytics or tracking | Pass by inspection | No analytics integration is present. |
-| Persistent files inside Homebridge storage | Pass after hardening | Energy history uses `api.user.storagePath()`; external data-directory override removed. |
+| Persistent files inside Homebridge storage | Pass | Energy history uses `api.user.storagePath()`; external data-directory override removed. |
 | Errors caught and logged | Partial | Main sampling, Matter registration and cloud helper failures are caught. Continue adding failure-path tests, especially UI server startup and cloud auth/MFA. |
 
 ## Blocking work before requesting verification
