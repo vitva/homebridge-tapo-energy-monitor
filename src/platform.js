@@ -2,6 +2,12 @@
 
 const path = require('path');
 const { EnergyStore } = require('./energy-store');
+const {
+  PLUGIN_IDENTIFIER,
+  PLATFORM_NAME,
+  createEstimatedMeterAccessory,
+  updateEstimatedMeter
+} = require('./matter-meter');
 
 class TapoEnergyMonitorPlatform {
   constructor(log, config, api) {
@@ -10,15 +16,19 @@ class TapoEnergyMonitorPlatform {
     this.api = api;
     this.timer = null;
     this.store = null;
+    this.matterMeterUuid = null;
 
-    api.on('didFinishLaunching', () => this.start());
+    api.on('didFinishLaunching', () => {
+      this.start().catch(error => this.log.error('Could not start Tapo Energy Monitor: %s', error.message));
+    });
     api.on('shutdown', () => {
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
     });
   }
 
-  start() {
+  async start() {
+    if (this.timer) return;
     if (this.config.simulationMode !== true) {
       this.log.warn('Simulation is disabled, but real Tapo communication is not implemented. No devices will be polled.');
       return;
@@ -50,8 +60,9 @@ class TapoEnergyMonitorPlatform {
     }
 
     this.store.setActiveDevices(normalized.map(device => device.id));
+    await this.registerMatterMeter();
 
-    const sample = () => {
+    const sample = async () => {
       const now = Date.now();
       for (const device of normalized) {
         this.store.recordPower(device.id, device.powerW, now, device);
@@ -60,6 +71,15 @@ class TapoEnergyMonitorPlatform {
       const today = localDateKey(new Date(now));
       const totalTodayWh = summary.totals.daily[today] || 0;
       const currentPower = normalized.reduce((sum, device) => sum + device.powerW, 0);
+
+      if (this.matterMeterUuid) {
+        const meter = await updateEstimatedMeter(this.api, this.matterMeterUuid, summary);
+        if (meter) {
+          this.log.info('[MATTER SIMULATION] estimated meter: %s W | cumulative estimate: %s Wh',
+            meter.activePowerW.toFixed(1), meter.cumulativeEnergyWh.toFixed(2));
+        }
+      }
+
       this.log.info('[SIMULATION] %s devices | combined: %s W | estimated today: %s Wh',
         normalized.length, currentPower.toFixed(1), totalTodayWh.toFixed(2));
       for (const device of normalized) {
@@ -69,9 +89,25 @@ class TapoEnergyMonitorPlatform {
       }
     };
 
-    sample();
-    this.timer = setInterval(sample, interval * 1000);
+    await sample();
+    this.timer = setInterval(() => {
+      sample().catch(error => this.log.error('Energy sample failed: %s', error.message));
+    }, interval * 1000);
     this.log.info('Prototype started in simulation mode. No physical Tapo devices are contacted.');
+  }
+
+  async registerMatterMeter() {
+    if (this.config.enableMatterMeter === false) return;
+
+    const accessory = createEstimatedMeterAccessory(this.api, this.config.matterMeterName || 'Tapo Energy — Расчётная');
+    if (!accessory) {
+      this.log.warn('Matter meter not registered. Enable Matter on this Homebridge bridge and use Homebridge 2.2.0 or later.');
+      return;
+    }
+
+    await this.api.matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
+    this.matterMeterUuid = accessory.UUID;
+    this.log.info('Matter virtual energy sensor registered: %s', accessory.displayName);
   }
 }
 
