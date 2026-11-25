@@ -3,7 +3,7 @@
   "pluginType": "platform",
   "singular": true,
   "headerDisplay": "Multi-device simulator. All readings are simulated; real Tapo communication is not implemented.",
-  "footerDisplay": "Data is stored locally on the Homebridge host.",
+  "footerDisplay": "Data is stored locally on the Homebridge host. Optional Matter export publishes the simulated aggregate as estimated energy.",
   "schema": {
     "type": "object",
     "properties": {
@@ -17,6 +17,17 @@
         "type": "boolean",
         "default": true,
         "description": "Keep enabled until real Tapo integration is implemented."
+      },
+      "enableMatterMeter": {
+        "title": "Publish Matter energy sensor",
+        "type": "boolean",
+        "default": true,
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.2.0 or later. Publishes estimated totals only; real Tapo counters will be a separate meter."
+      },
+      "matterMeterName": {
+        "title": "Matter sensor name",
+        "type": "string",
+        "default": "Tapo Energy — Расчётная"
       },
       "pollingIntervalSeconds": {
         "title": "Polling interval (seconds)",
