@@ -55,6 +55,11 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
   assert.equal(result.ok, true);
   assert.equal(result.deviceCount, 3);
   assert.equal(result.p110mCount, 1);
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
+    ['authentication', 'success'], ['thing_service', 'success'],
+    ['device_list', 'success'], ['usage', 'success']
+  ]);
+  assert.ok(result.diagnostics.every(item => Number.isInteger(item.durationMs) && item.durationMs >= 0));
   assert.deepEqual(result.readings, [{ id: 'p110m-1', usage: { today: 1.25, history: [] } }]);
   assert.deepEqual(calls.map(call => call[0]), ['login', 'discover', 'api', 'list', 'usage']);
   assert.equal(calls[1][2], 'session-secret');
@@ -73,6 +78,7 @@ test('returns MFA challenge without attempting Thing API calls', async () => {
     apiFactory() { apiCreated = true; }
   });
   assert.equal(result.code, 'mfa_required');
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [['authentication', 'required']]);
   assert.equal(apiCreated, false);
 });
 
