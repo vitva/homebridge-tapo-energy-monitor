@@ -159,3 +159,53 @@ test('returns an MFA challenge without retaining account credentials', async () 
   assert.equal(Object.hasOwn(auth, 'password'), false);
   assert.equal(Object.hasOwn(auth, 'username'), false);
 });
+
+
+test('rejects an invalid MFA code without exposing credentials in diagnostics', async () => {
+  const replies = [
+    { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } },
+    { error_code: -20677, result: { mfaType: 'verifyCodeLogin' } },
+    { error_code: -20678, msg: 'invalid verification code' }
+  ];
+  const requests = [];
+  const diagnostics = [];
+  const request = (url, options, callback) => {
+    const req = new EventEmitter();
+    req.end = body => {
+      requests.push({ url: new URL(String(url)), body: JSON.parse(body) });
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify(replies.shift()));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({
+    request,
+    termId: 'test-terminal',
+    onDiagnostic: event => diagnostics.push(event)
+  });
+  const result = await auth.login({
+    username: 'private@example.com',
+    password: 'never-return-this-password',
+    mfaCode: '654321'
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'mfa_failed');
+  assert.equal(requests.length, 3);
+  assert.equal(requests[2].url.pathname, '/api/v2/account/checkMFACodeAndLogin');
+  assert.equal(requests[2].body.code, '654321');
+  assert.deepEqual(diagnostics.map(item => [item.stage, item.status]), [
+    ['regional_server', 'success'],
+    ['authentication', 'failed']
+  ]);
+  const serialized = JSON.stringify({ result, diagnostics });
+  assert.equal(serialized.includes('never-return-this-password'), false);
+  assert.equal(serialized.includes('654321'), false);
+  assert.equal(serialized.includes('private@example.com'), false);
+  assert.equal(Object.hasOwn(auth, 'password'), false);
+  assert.equal(Object.hasOwn(auth, 'username'), false);
+});
