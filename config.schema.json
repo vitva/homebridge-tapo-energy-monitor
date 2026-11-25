@@ -2,8 +2,8 @@
   "pluginAlias": "TapoEnergyMonitor",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Tapo cloud diagnostic plus energy-history prototype. The cloud test uses TP-Link account login; live P110M telemetry is not yet enabled for aggregation.",
-  "footerDisplay": "The cloud diagnostic is read-only. Account credentials entered in the custom UI are not stored in plugin settings.",
+  "headerDisplay": "Tapo energy monitoring. Simulation is opt-in; the platform stays idle until at least one simulated device is configured. Cloud diagnostics are read-only and are not yet connected to live aggregation.",
+  "footerDisplay": "History is stored only in the Homebridge storage directory. Tapo account credentials entered for a cloud diagnostic are not saved in plugin settings.",
   "schema": {
     "type": "object",
     "properties": {
@@ -15,8 +15,8 @@
       "simulationMode": {
         "title": "Simulation mode",
         "type": "boolean",
-        "default": true,
-        "description": "Keep enabled until real Tapo integration is implemented."
+        "default": false,
+        "description": "Enable only to run an explicit simulation. The platform stays idle by default."
       },
       "enableMatterMeter": {
         "title": "Publish Matter energy sensor",
@@ -36,24 +36,10 @@
         "minimum": 30,
         "maximum": 3600
       },
-      "simulatedPowerW": {
-        "title": "Simulated power (W)",
-        "type": "number",
-        "default": 450,
-        "minimum": 0,
-        "maximum": 5000,
-        "description": "Fallback power for the single demo device when Simulated devices is empty."
-      },
-      "dataDirectory": {
-        "title": "Data directory (optional)",
-        "type": "string",
-        "default": "",
-        "description": "Leave empty to use the Homebridge storage directory."
-      },
       "simulatedDevices": {
         "title": "Simulated devices",
         "type": "array",
-        "description": "Add one row per test device. These are simulated readings, not physical Tapo devices.",
+        "description": "Add at least one row to explicitly start simulation. Empty list means the platform remains idle.",
         "items": {
           "type": "object",
           "title": "Device",
@@ -90,27 +76,7 @@
             "name",
             "powerW"
           ]
-        },
-        "default": [
-          {
-            "id": "demo-p110m",
-            "name": "Demo P110M",
-            "model": "P110M",
-            "powerW": 450
-          },
-          {
-            "id": "demo-s112",
-            "name": "Demo S112",
-            "model": "S112",
-            "powerW": 120
-          },
-          {
-            "id": "demo-s110e",
-            "name": "Demo S110E",
-            "model": "S110E",
-            "powerW": 60
-          }
-        ]
+        }
       },
       "tapoCloudPython": {
         "title": "Python executable for Tapo cloud",
@@ -122,8 +88,7 @@
     "required": [
       "name",
       "simulationMode",
-      "pollingIntervalSeconds",
-      "simulatedPowerW"
+      "pollingIntervalSeconds"
     ]
   },
   "form": null,
