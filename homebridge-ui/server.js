@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { runTapoCloudProbe } = require('../src/tapo-cloud');
 
 (async () => {
   const { HomebridgePluginUiServer } = await import('@homebridge/plugin-ui-utils');
@@ -10,6 +11,7 @@ const path = require('node:path');
     constructor() {
       super();
       this.onRequest('/summary', this.getSummary.bind(this));
+      this.onRequest('/tapo-cloud-test', this.testTapoCloud.bind(this));
       this.ready();
     }
 
@@ -28,6 +30,19 @@ const path = require('node:path');
         if (error.code === 'ENOENT') return { available: false, message: 'No history file yet. Start the platform in simulation mode and wait for its first sample.' };
         throw error;
       }
+    }
+
+    async testTapoCloud(payload = {}) {
+      const username = typeof payload.username === 'string' ? payload.username.trim() : '';
+      const password = typeof payload.password === 'string' ? payload.password : '';
+      const mfaCode = typeof payload.mfaCode === 'string' ? payload.mfaCode.trim() : '';
+      if (!username || !password) {
+        return { ok: false, code: 'credentials_required', message: 'Укажите email и пароль аккаунта Tapo.' };
+      }
+      if (username.length > 320 || password.length > 2048 || mfaCode.length > 32) {
+        return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
+      }
+      return runTapoCloudProbe({ username, password, mfaCode });
     }
   }
 
