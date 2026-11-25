@@ -33,6 +33,11 @@ class ThingCloudValidationTests(unittest.TestCase):
     def test_accepts_zero_error_code(self):
         self.assertIsNone(MODULE.api_error({"error_code": 0, "data": []}))
 
+    def test_does_not_forward_raw_cloud_error_message(self):
+        message = MODULE.api_error({"error_code": 123, "msg": "private response detail"})
+        self.assertIn("123", message)
+        self.assertNotIn("private response detail", message)
+
 
 if __name__ == "__main__":
     unittest.main()
