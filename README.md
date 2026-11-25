@@ -33,7 +33,7 @@ The P110M route now targets the newer Tapo Thing Cloud API: account authenticati
 
 The implementation plan is therefore:
 - authenticate to the TP-Link/Tapo account and discover devices through the Tapo cloud;
-- use cloud passthrough for read-only live power and, if verified, history/counter queries;
+- use the Tapo Thing Cloud `/usage` endpoint for read-only live power and history;
 - test P110M first; do not assume P110 support automatically means P110M support;
 - keep S112 and S110E readings unavailable until their cloud-relayed model-specific responses are verified;
 - store credentials/tokens server-side only; never expose them to the browser or logs;
@@ -70,7 +70,7 @@ This is a connectivity diagnostic, not production polling. A successful login an
 - Tapo S112
 - Tapo S110E
 
-Local protocol support and device-specific history APIs remain to be implemented and verified against hardware. When verified real counters are available, they will be exposed separately from estimates; they will not be added twice to the same total.
+Cloud Thing API support for these models remains to be implemented and verified against the user's account and devices. When verified real counters are available, they will be exposed separately from estimates; they will not be added twice to the same total.
 
 ## Development
 
