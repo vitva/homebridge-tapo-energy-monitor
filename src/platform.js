@@ -1,6 +1,5 @@
 'use strict';
 
-const path = require('path');
 const { EnergyStore } = require('./energy-store');
 const {
   PLUGIN_IDENTIFIER,
