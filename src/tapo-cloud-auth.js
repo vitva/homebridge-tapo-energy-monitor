@@ -2,6 +2,8 @@
 
 const https = require('node:https');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const TAPO_HOST = 'https://n-wap.i.tplinkcloud.com';
 const APP_TYPE = 'TP-Link_Tapo_Android';
@@ -10,6 +12,7 @@ const ACCESS_KEY = '4d11b6b9d5ea4d19a829adbb9714b057';
 const SECRET_KEY = '6ed7d97f3e73467f8a5bab90b577ba4c';
 const SIGNING_TIMESTAMP = '9999999999';
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const TP_LINK_CA_PATH = path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem');
 const PATHS = {
   accountStatus: '/api/v2/account/getAccountStatusAndUrl',
   login: '/api/v2/account/login',
@@ -57,6 +60,7 @@ function postJson(url, bodyJson, headers, options = {}) {
         ...headers
       },
       timeout: timeoutMs,
+      ca: options.ca || fs.readFileSync(options.caPath || TP_LINK_CA_PATH),
       rejectUnauthorized: true
     }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400) {
