@@ -180,3 +180,26 @@ test('attributes Thing service discovery failures to the correct stage', async (
   assert.equal(serialized.includes('session-secret'), false);
   assert.equal(serialized.includes('private transport details'), false);
 });
+
+
+test('attributes Thing API client initialization failures to device listing', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'private@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 'session-secret', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory() { throw new Error('private constructor detail'); }
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
+    ['authentication', 'success'],
+    ['thing_service', 'success'],
+    ['device_list', 'failed']
+  ]);
+  const serialized = JSON.stringify(result);
+  assert.equal(serialized.includes('session-secret'), false);
+  assert.equal(serialized.includes('private constructor detail'), false);
+});
