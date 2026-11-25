@@ -73,10 +73,14 @@ class TapoEnergyMonitorPlatform {
       const currentPower = normalized.reduce((sum, device) => sum + device.powerW, 0);
 
       if (this.matterMeterUuid) {
-        const meter = await updateEstimatedMeter(this.api, this.matterMeterUuid, summary);
-        if (meter) {
-          this.log.info('[MATTER SIMULATION] estimated meter: %s W | cumulative estimate: %s Wh',
-            meter.activePowerW.toFixed(1), meter.cumulativeEnergyWh.toFixed(2));
+        try {
+          const meter = await updateEstimatedMeter(this.api, this.matterMeterUuid, summary);
+          if (meter) {
+            this.log.info('[MATTER SIMULATION] estimated meter: %s W | cumulative estimate: %s Wh',
+              meter.activePowerW.toFixed(1), meter.cumulativeEnergyWh.toFixed(2));
+          }
+        } catch (error) {
+          this.log.warn('Matter energy update failed; local history will continue: %s', error.message);
         }
       }
 
@@ -105,9 +109,13 @@ class TapoEnergyMonitorPlatform {
       return;
     }
 
-    await this.api.matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
-    this.matterMeterUuid = accessory.UUID;
-    this.log.info('Matter virtual energy sensor registered: %s', accessory.displayName);
+    try {
+      await this.api.matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
+      this.matterMeterUuid = accessory.UUID;
+      this.log.info('Matter virtual energy sensor registered: %s', accessory.displayName);
+    } catch (error) {
+      this.log.warn('Matter sensor registration failed; local history will continue: %s', error.message);
+    }
   }
 }
 
