@@ -4,6 +4,7 @@ const https = require('node:https');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { validateThingHost } = require('./tapo-thing-api');
 
 const TAPO_HOST = 'https://n-wap.i.tplinkcloud.com';
 const APP_TYPE = 'TP-Link_Tapo_Android';
