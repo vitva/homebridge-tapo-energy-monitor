@@ -193,7 +193,7 @@
           device_list: 'Список устройств',
           usage: 'Энергопоказания P110M'
         };
-        const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA' };
+        const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA', skipped: 'Пропущено' };
         for (const item of result.diagnostics) {
           const tr = document.createElement('tr');
           for (const value of [
