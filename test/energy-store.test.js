@@ -83,7 +83,7 @@ test('marks removed devices inactive without deleting their historical totals', 
     const summary = store.getSummary();
     assert.equal(summary.devices['plug-1'].active, false);
     assert.equal(summary.devices['plug-2'].active, true);
-    assert.equal(summary.devices['plug-1'].energyWh, 0);
+    assert.equal(summary.devices['plug-1'].energyWh, 100);
     assert.equal(summary.totals.daily['2026-11-25'], 100);
   });
 });
