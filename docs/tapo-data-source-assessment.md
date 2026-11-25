@@ -43,6 +43,12 @@ Implementation rules:
 6. Keep S112/S110E unavailable until their own cloud-relayed protocol responses and import/export direction are verified.
 7. When a device is offline, retain the last reading with its timestamp and mark it stale; do not fabricate a live value or backfill missing intervals with estimates.
 
+## Current diagnostic implementation
+
+The plugin now contains a read-only cloud probe using the Python `tplink-cloud-api` client's Tapo-only `TPLinkApi(cloud_type="tapo")` authentication and `TPLinkDeviceClient` passthrough. It discovers Tapo account devices, filters model metadata for P110M, and attempts only `emeter.get_realtime`. Credentials are passed from the custom UI to the helper through stdin; no token is persisted. MFA is handled by a second test submission with the fresh code.
+
+This code has not yet been exercised against the user's account or P110M. The upstream cloud CLI's published energy support list still only names P110, so a returned P110M reading is not assumed. If the device is listed but its energy command fails, keep the result as unsupported until a sanitized response is examined.
+
 ## Recommended implementation sequence
 
 1. Introduce a normalized cloud adapter contract: `authenticate()`, `discover()`, `readLive(deviceId)`, `readHistory(deviceId, range)`, `readMeter(deviceId)`.
