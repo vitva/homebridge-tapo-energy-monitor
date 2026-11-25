@@ -40,8 +40,7 @@ def api_error(payload):
     except (TypeError, ValueError):
         code = -1
     if code:
-        message = payload.get("msg") or payload.get("errorMsg") or "Cloud API error"
-        return "TP-Link Thing API error " + str(code) + ": " + str(message)[:180]
+        return "TP-Link Thing API error " + str(code)
     return None
 
 
