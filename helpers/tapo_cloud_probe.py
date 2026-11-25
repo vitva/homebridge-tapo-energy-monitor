@@ -182,7 +182,7 @@ def main():
                 usage_response = response.json()
                 problem = api_error(usage_response)
                 if problem:
-                    readings.append({"id": item["id"], "error": problem})
+                    readings.append({"id": item["id"], "error": "TP-Link Thing API отклонил запрос показаний."})
                     add_diagnostic(diagnostics, "usage", "failed", usage_started, count=usage_index)
                     continue
                 usage = usage_response.get("data", usage_response)
