@@ -39,7 +39,7 @@
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
-    <div class="col-12 col-md-4"><label class="form-label" for="tapo-mfa">Код подтверждения (если запрошен)</label><input id="tapo-mfa" class="form-control" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
+    <div class="col-12 col-md-4" id="tapo-mfa-wrap" hidden><label class="form-label" for="tapo-mfa">Код подтверждения TP-Link</label><input id="tapo-mfa" class="form-control" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
   </div>
   <div class="d-flex align-items-center gap-3 mt-3">
     <button id="tapo-test" class="btn btn-primary" type="button">Проверить подключение к Tapo</button>
@@ -268,8 +268,13 @@
           note.textContent = 'Аккаунт и P110M обнаружены, но формат ответа энергомониторинга пока не подтверждён.';
           resultBox.append(note);
         }
-      } else if (result.code === 'mfa_required') {
-        byId('tapo-mfa').focus();
+      }
+      if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
+        byId('tapo-mfa-wrap').hidden = false;
+        if (result.code === 'mfa_required') byId('tapo-mfa').focus();
+      } else {
+        byId('tapo-mfa-wrap').hidden = true;
+        byId('tapo-mfa').value = '';
       }
     } catch (error) {
       status.textContent = 'Ошибка проверки';
