@@ -47,7 +47,7 @@
   <div id="tapo-test-result" class="mt-3" aria-live="polite"></div>
   <hr class="my-4">
   <h5>Platform settings</h5>
-  <p class="text-muted small">Configure simulation devices and polling below. Real Tapo connections are not active in this prototype.</p>
+  <p class="text-muted small">Configure simulation devices and polling below. Cloud diagnostics do not yet feed the energy-history totals.</p>
   <div id="settings-form"></div>
 </div>
 
@@ -60,6 +60,7 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
   let dataDirectory = '';
+  let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
     const status = byId('status');
@@ -139,11 +140,13 @@
       const config = await homebridge.getPluginConfig();
       const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
       dataDirectory = platform && typeof platform.dataDirectory === 'string' ? platform.dataDirectory : '';
+      tapoCloudPython = platform && typeof platform.tapoCloudPython === 'string' && platform.tapoCloudPython.trim() ? platform.tapoCloudPython.trim() : 'python3';
       homebridge.showSchemaForm();
       homebridge.addEventListener('configChanged', (event) => {
         const updated = event.data || [];
         const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
         dataDirectory = current && typeof current.dataDirectory === 'string' ? current.dataDirectory : '';
+        tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
       });
       await refresh();
       window.setInterval(refresh, 15000);
