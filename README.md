@@ -6,13 +6,13 @@ A separate Homebridge plugin project for local Tapo energy monitoring and combin
 
 **Simulation only. Real Tapo communication is not implemented.** The current prototype:
 - registers a Homebridge dynamic platform;
-- exposes graphical settings in Homebridge UI;
+- provides a custom Homebridge UI dashboard with combined power, per-device readings, and daily/monthly/yearly estimates;
+- exposes the graphical platform settings below the dashboard;
 - accepts multiple simulated devices with unique IDs, names, model labels, and power values;
-- estimates energy per device and for the combined group;
 - stores data locally in `tapo-energy-history.json`;
-- aggregates Wh by local calendar day, month, and year.
+- aggregates estimated Wh per device and for the combined group.
 
-The simulator does not contact physical devices. It does not create HomeKit energy-history records or claim that Apple Home displays accumulated kWh.
+The dashboard reads the local JSON history file from the Homebridge host. It refreshes every 15 seconds while the plugin settings screen is open. The simulator does not contact physical devices. It does not create HomeKit energy-history records or claim that Apple Home displays accumulated kWh.
 
 ## Planned physical devices
 
