@@ -43,7 +43,15 @@ class EnergyStore {
     }
   }
 
-  setActiveDevices(deviceIds) {\n    const activeIds = new Set(deviceIds);\n    for (const [deviceId, device] of Object.entries(this.state.devices)) {\n      device.active = activeIds.has(deviceId);\n    }\n    this.save();\n  }\n\n  recordPower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
+  setActiveDevices(deviceIds) {
+    const activeIds = new Set(deviceIds);
+    for (const [deviceId, device] of Object.entries(this.state.devices)) {
+      device.active = activeIds.has(deviceId);
+    }
+    this.save();
+  }
+
+  recordPower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
     if (typeof deviceId !== 'string' || !deviceId.trim()) return;
     if (!Number.isFinite(powerW) || powerW < 0 || !Number.isFinite(timestamp)) return;
 
@@ -59,6 +67,7 @@ class EnergyStore {
     this.state.devices[deviceId] = {
       ...previous,
       id: deviceId,
+      active: true,
       name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
       model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
       powerW,
