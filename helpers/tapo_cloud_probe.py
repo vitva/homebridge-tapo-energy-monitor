@@ -1,11 +1,48 @@
 #!/usr/bin/env python3
-"""Read-only Tapo cloud account and P110M energy diagnostic."""
-import asyncio
+"""Read-only TP-Link Tapo Thing Cloud diagnostic (no LAN fallback)."""
 import json
 import sys
+from pathlib import Path
+from urllib.parse import quote, urlparse
+
+THING_APP = "TP-Link_Tapo_Android"
+THING_VERSION = "3.13.818"
+THING_SUFFIX = "-app-server.iot.i.tplinkcloud.com"
+THING_SERVICES = [
+    "nbu.iot-app-server.app-v2",
+    "nbu.iot-cloud-gateway.app-v2",
+    "nbu.iot-security.appdevice-v2",
+]
+
 
 def emit(value):
     print(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+
+def valid_thing_host(raw):
+    parsed = urlparse(str(raw or "").rstrip("/"))
+    host = (parsed.hostname or "").lower()
+    if (parsed.scheme != "https" or parsed.username or parsed.password or
+            parsed.port or parsed.path or not host.endswith(THING_SUFFIX) or
+            not host[:-len(THING_SUFFIX)] or
+            any(not (c.islower() or c.isdigit() or c == "-") for c in host[:-len(THING_SUFFIX)])):
+        raise ValueError("TP-Link returned an invalid Thing API host.")
+    return "https://" + host
+
+
+def api_error(payload):
+    if not isinstance(payload, dict):
+        return "Invalid response from TP-Link."
+    code = payload.get("error_code", payload.get("errorCode", 0))
+    try:
+        code = int(code or 0)
+    except (TypeError, ValueError):
+        code = -1
+    if code:
+        message = payload.get("msg") or payload.get("errorMsg") or "Cloud API error"
+        return "TP-Link Thing API error " + str(code) + ": " + str(message)[:180]
+    return None
+
 
 def main():
     try:
@@ -16,12 +53,11 @@ def main():
         if not isinstance(username, str) or not username.strip() or not isinstance(password, str) or not password:
             emit({"ok": False, "code": "credentials_required", "message": "Укажите email и пароль аккаунта Tapo."})
             return
+        import requests
         from tplinkcloud.client import TPLinkApi
-        from tplinkcloud.device_client import TPLinkDeviceClient
-        from tplinkcloud.device_info import TPLinkDeviceInfo
         from tplinkcloud.exceptions import TPLinkAuthError, TPLinkCloudError, TPLinkMFARequiredError
     except ImportError:
-        emit({"ok": False, "code": "dependency_missing", "message": "Не найдена библиотека tplink-cloud-api. Установите её в Python окружение Homebridge."})
+        emit({"ok": False, "code": "dependency_missing", "message": "Не найдена библиотека tplink-cloud-api. Установите requirements-cloud.txt в Python-окружение Homebridge."})
         return
     except Exception:
         emit({"ok": False, "code": "invalid_input", "message": "Не удалось прочитать параметры проверки."})
@@ -35,55 +71,116 @@ def main():
         if not token:
             emit({"ok": False, "code": "login_failed", "message": "TP-Link не вернул токен облачной сессии."})
             return
-        raw_devices = api.get_device_info_list(token)
+
+        # The Thing API uses a newer Tapo app identity than the account login API.
+        api._query_params.update({"appName": THING_APP, "appVer": THING_VERSION})
+        service_response = api._request_post_v2(
+            api.host,
+            "/api/v2/common/getAppServiceUrlByCloudUserName",
+            {"cloudUserName": username.strip(), "serviceIds": THING_SERVICES},
+            token,
+        )
+        if not service_response.successful:
+            emit({"ok": False, "code": "thing_service_discovery_failed", "message": "Вход выполнен, но TP-Link не выдал адрес Thing Cloud API."})
+            return
+
+        app_server = ""
+        result = service_response.result or {}
+        for service in result.get("serviceList", []):
+            if service.get("serviceId") == "nbu.iot-app-server.app-v2":
+                app_server = service.get("serviceUrl") or ""
+                break
+        host = valid_thing_host(app_server)
+
+        session = requests.Session()
+        session.verify = str(Path(__file__).with_name("tplink-cloud-server-ca.pem"))
+        session.headers.update({
+            "Authorization": "ut|" + token,
+            "app-cid": "app:" + THING_APP + ":" + api._term_id,
+            "x-app-name": THING_APP,
+            "x-app-version": THING_VERSION,
+            "x-term-id": api._term_id,
+            "x-ospf": "Android 15",
+            "x-net-type": "wifi",
+            "x-strict": "0",
+            "x-locale": "en_US",
+            "x-app-brand": "TPLINK",
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=UTF-8",
+            "User-Agent": THING_APP + "/" + THING_VERSION + "(Homebridge/;Android 15)",
+        })
+
+        things = []
+        for page in range(100):
+            params = {
+                "page": page, "pageSize": 100,
+                "includeKasaShareDevices": "false",
+                "includePcDevice": "false",
+                "includeMatterDevice": "false",
+                "includeExternalVendorDeviceInfo": "false",
+            }
+            response = session.get(host + "/v2/things", params=params, timeout=20, allow_redirects=False)
+            response.raise_for_status()
+            payload = response.json()
+            problem = api_error(payload)
+            if problem:
+                raise RuntimeError(problem)
+            page_items = payload.get("data") or []
+            things.extend(page_items)
+            total = int(payload.get("total") or 0)
+            if len(page_items) < 100 or (total and len(things) >= total):
+                break
+
         devices = []
-        targets = []
-        for raw in raw_devices or []:
-            info = TPLinkDeviceInfo(raw, cloud_type="tapo")
-            model = str(info.device_model or "")
-            item = {"id": info.device_id, "name": info.alias or info.device_name or "Без имени",
-                    "model": model, "firmware": info.fw_ver, "status": info.status}
+        p110m = []
+        for thing in things:
+            model = str(thing.get("model") or thing.get("deviceModel") or "")
+            name = thing.get("nickname") or thing.get("alias") or model or "Без имени"
+            item = {
+                "id": thing.get("thingName") or thing.get("deviceId"),
+                "name": name,
+                "model": model,
+                "status": thing.get("status"),
+                "category": thing.get("category") or thing.get("deviceType"),
+            }
             devices.append(item)
-            if "P110M" in model.upper():
-                targets.append((info, item))
+            if "P110M" in model.upper() and item["id"]:
+                p110m.append((thing, item))
+
         readings = []
-        for info, item in targets:
-            client = TPLinkDeviceClient(info.app_server_url, token, term_id=api._term_id,
-                access_key=api.access_key, secret_key=api.secret_key,
-                app_name=api._app_name, cloud_type="tapo")
+        for thing, item in p110m:
             try:
-                response = asyncio.run(asyncio.wait_for(
-                    client.pass_through_request(info.device_id, {"emeter": {"get_realtime": None}}), timeout=35))
-                meter = response.get("emeter", {}).get("get_realtime", {}) if isinstance(response, dict) else {}
-                if isinstance(meter, dict) and meter.get("err_code", 0) == 0:
-                    fields = {key: meter[key] for key in
-                        ("power_mw", "voltage_mv", "current_ma", "total_wh", "power", "voltage", "current", "total")
-                        if key in meter and isinstance(meter[key], (int, float))}
-                    reading = {"id": info.device_id, "name": item["name"], "model": item["model"], "fields": fields}
-                    if isinstance(fields.get("power_mw"), (int, float)):
-                        reading["powerW"] = fields["power_mw"] / 1000
-                    readings.append(reading)
-                else:
-                    readings.append({"id": info.device_id, "name": item["name"], "model": item["model"],
-                        "error": "Устройство не вернуло данные emeter.get_realtime.",
-                        "deviceErrorCode": meter.get("err_code") if isinstance(meter, dict) else None})
-            except asyncio.TimeoutError:
-                readings.append({"id": info.device_id, "name": item["name"], "model": item["model"],
-                    "error": "Нет ответа от устройства через облако за 35 секунд."})
+                thing_id = quote(str(item["id"]), safe="")
+                response = session.get(host + "/v1/things/" + thing_id + "/usage",
+                                        timeout=25, allow_redirects=False)
+                response.raise_for_status()
+                usage_response = response.json()
+                problem = api_error(usage_response)
+                if problem:
+                    readings.append({"id": item["id"], "error": problem})
+                    continue
+                usage = usage_response.get("data", usage_response)
+                readings.append({"id": item["id"], "usage": usage})
+            except requests.Timeout:
+                readings.append({"id": item["id"], "error": "Облачный запрос показаний превысил лимит времени."})
             except Exception:
-                readings.append({"id": info.device_id, "name": item["name"], "model": item["model"],
-                    "error": "Облачный запрос энергии завершился ошибкой. Подробности скрыты."})
-        emit({"ok": True, "cloud": "tapo", "authenticated": True, "deviceCount": len(devices),
-            "devices": devices, "p110mCount": len(targets), "readings": readings,
-            "message": "Вход в облако Tapo выполнен. Команды управления устройствами не отправлялись."})
+                readings.append({"id": item["id"], "error": "Не удалось прочитать энергопоказания из Thing Cloud API."})
+
+        emit({
+            "ok": True, "cloud": "tapo-thing-api", "authenticated": True,
+            "deviceCount": len(devices), "devices": devices,
+            "p110mCount": len(p110m), "readings": readings,
+            "message": "Авторизация и обнаружение устройств через Tapo Thing Cloud API выполнены. Запрошены только данные чтения; команды управления не отправлялись."
+        })
     except TPLinkMFARequiredError:
         emit({"ok": False, "code": "mfa_required", "message": "TP-Link запросил код подтверждения. Введите свежий код из письма и повторите проверку."})
     except TPLinkAuthError:
         emit({"ok": False, "code": "auth_failed", "message": "TP-Link отклонил логин или пароль. Проверьте данные аккаунта."})
     except TPLinkCloudError:
-        emit({"ok": False, "code": "cloud_error", "message": "Ошибка обращения к облаку TP-Link. Повторите проверку позже."})
+        emit({"ok": False, "code": "cloud_error", "message": "Ошибка авторизации или обращения к облаку TP-Link."})
     except Exception:
-        emit({"ok": False, "code": "unexpected_error", "message": "Проверка завершилась ошибкой. Подробности, способные содержать секреты, скрыты."})
+        emit({"ok": False, "code": "thing_api_error", "message": "Не удалось получить список устройств или данные Thing Cloud API. Подробности скрыты."})
+
 
 if __name__ == "__main__":
     main()
