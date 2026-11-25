@@ -59,7 +59,6 @@
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  let dataDirectory = '';
   let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
@@ -83,7 +82,7 @@
   async function refresh() {
     byId('refresh').disabled = true;
     try {
-      const result = await homebridge.request('/summary', { dataDirectory });
+      const result = await homebridge.request('/summary');
       if (!result.available) {
         byId('dashboard').hidden = true;
         showMessage(result.message || 'No readings recorded yet.');
@@ -139,13 +138,11 @@
     try {
       const config = await homebridge.getPluginConfig();
       const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
-      dataDirectory = platform && typeof platform.dataDirectory === 'string' ? platform.dataDirectory : '';
       tapoCloudPython = platform && typeof platform.tapoCloudPython === 'string' && platform.tapoCloudPython.trim() ? platform.tapoCloudPython.trim() : 'python3';
       homebridge.showSchemaForm();
       homebridge.addEventListener('configChanged', (event) => {
         const updated = event.data || [];
         const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
-        dataDirectory = current && typeof current.dataDirectory === 'string' ? current.dataDirectory : '';
         tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
       });
       await refresh();
