@@ -20,4 +20,12 @@ jobs:
       - run: npm install --ignore-scripts
       - run: npm test
       - run: npm run lint
-      - run: npm pack --dry-run
+      - if: matrix.node-version == 22
+        run: mkdir -p artifacts && npm pack --pack-destination artifacts
+      - if: matrix.node-version == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebridge-tapo-energy-monitor-npm-package
+          path: artifacts/*.tgz
+          if-no-files-found: error
+          retention-days: 14
