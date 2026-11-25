@@ -10,21 +10,42 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [22, 24, 26]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm install --ignore-scripts
+      - name: Install current Homebridge 2
+        run: npm install --no-save --no-package-lock homebridge@2.5.0
       - run: npm test
       - run: npm run lint
+      - name: Verify Homebridge 2 ESM plugin loading
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import 'homebridge';
+          import pluginInitializer from './index.js';
+
+          assert.equal(typeof pluginInitializer, 'function');
+          const registrations = [];
+          pluginInitializer({
+            registerPlatform: (...args) => registrations.push(args),
+          });
+          assert.equal(registrations.length, 1);
+          assert.equal(registrations[0][0], 'homebridge-tapo-energy-monitor');
+          assert.equal(registrations[0][1], 'TapoEnergyMonitor');
+          assert.equal(typeof registrations[0][2], 'function');
+          console.log('Homebridge 2 ESM loader compatibility passed.');
+          NODE
       - run: python3 -m py_compile helpers/tapo_cloud_probe.py
       - run: python3 -m unittest discover -s helpers -p 'test_*.py'
-      - if: matrix.node-version == 22
+      - if: matrix.node-version == 26
         run: mkdir -p artifacts && npm pack --pack-destination artifacts
-      - if: matrix.node-version == 22
+      - if: matrix.node-version == 26
         uses: actions/upload-artifact@v4
         with:
           name: homebridge-tapo-energy-monitor-npm-package
