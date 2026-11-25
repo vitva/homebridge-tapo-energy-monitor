@@ -43,7 +43,7 @@ class EnergyStore {
     }
   }
 
-  recordPower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
+  setActiveDevices(deviceIds) {\n    const activeIds = new Set(deviceIds);\n    for (const [deviceId, device] of Object.entries(this.state.devices)) {\n      device.active = activeIds.has(deviceId);\n    }\n    this.save();\n  }\n\n  recordPower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
     if (typeof deviceId !== 'string' || !deviceId.trim()) return;
     if (!Number.isFinite(powerW) || powerW < 0 || !Number.isFinite(timestamp)) return;
 
