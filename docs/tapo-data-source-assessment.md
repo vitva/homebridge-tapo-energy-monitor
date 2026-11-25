@@ -22,7 +22,9 @@ The current `tapo` 0.13.0 API docs explicitly expose `get_current_power`, `get_e
 
 ## Cloud-only route and limitations
 
-The cloud path is not merely device discovery:
+The cloud path is not merely device discovery. A separate reverse-engineered implementation published in 2026 documents a newer Tapo Thing API for P110M: account authentication, service discovery, paginated Thing listing, and a read-only `GET /v1/things/{thingName}/usage` endpoint. That endpoint is documented to return current usage plus hourly/daily/monthly history. This is the route now being tested; it does not require the collector to share the device LAN. The older passthrough route remains a separate fallback candidate, not the primary P110M route.
+
+The cloud path consists of:
 
 - TP-Link account authentication uses the v2 account API, including regional endpoint resolution, token refresh and optional MFA.
 - Tapo devices can be discovered through the Tapo cloud account.
