@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js"
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check test/energy-store.test.js"
   },
   "keywords": [
     "homebridge-plugin",
@@ -33,7 +33,8 @@
     "index.js",
     "src/",
     "config.schema.json",
-    "README.md"
+    "README.md",
+    "test/"
   ],
   "repository": {
     "type": "git",
