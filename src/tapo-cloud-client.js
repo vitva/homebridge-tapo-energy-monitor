@@ -73,6 +73,7 @@ async function probeTapoThingCloud(options = {}) {
       .filter(item => /P110M/i.test(item.device.model) && item.device.id);
 
     const readings = [];
+    if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
     for (let index = 0; index < candidates.length; index += 1) {
       const item = candidates[index];
       const usageStarted = Date.now();
