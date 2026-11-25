@@ -4,7 +4,7 @@ import sys
 
 def main():
     data = json.load(sys.stdin)
-    from tplinkcloud.client import TPLinkApi
+    from tplinkcloud.client import TPLinkApi\n    from tplinkcloud.device_client import TPLinkDeviceClient\n    from tplinkcloud.device_info import TPLinkDeviceInfo
     from tplinkcloud.exceptions import TPLinkAuthError, TPLinkCloudError, TPLinkMFARequiredError
     try:
         api = TPLinkApi(cloud_type="tapo")
