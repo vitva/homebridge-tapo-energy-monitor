@@ -1,0 +1,49 @@
+{
+  "pluginAlias": "TapoEnergyMonitor",
+  "pluginType": "platform",
+  "singular": "Tapo Energy Monitor",
+  "headerDisplay": "Prototype: simulated readings only. Real Tapo device communication is not implemented yet.",
+  "footerDisplay": "Data is stored locally on the Homebridge host.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform name",
+        "type": "string",
+        "default": "Tapo Energy Monitor"
+      },
+      "simulationMode": {
+        "title": "Simulation mode",
+        "type": "boolean",
+        "default": true,
+        "description": "Keep enabled until real Tapo integration is implemented."
+      },
+      "pollingIntervalSeconds": {
+        "title": "Polling interval (seconds)",
+        "type": "integer",
+        "default": 60,
+        "minimum": 30,
+        "maximum": 3600
+      },
+      "simulatedPowerW": {
+        "title": "Simulated power (W)",
+        "type": "number",
+        "default": 450,
+        "minimum": 0,
+        "maximum": 5000
+      },
+      "dataDirectory": {
+        "title": "Data directory (optional)",
+        "type": "string",
+        "default": "",
+        "description": "Leave empty to use the Homebridge storage directory."
+      }
+    },
+    "required": [
+      "name",
+      "simulationMode",
+      "pollingIntervalSeconds",
+      "simulatedPowerW"
+    ]
+  }
+}
