@@ -21,7 +21,7 @@ No physical Tapo devices are contacted, and no HomeKit energy-history feature is
 
 The actual local protocol, supported history endpoints, and device-specific capabilities still need to be implemented and verified. Hardware testing will be required.
 
-## Install for development
+## Automated checks\n\nThe repository runs unit tests and JavaScript syntax checks on Node.js 18, 20, and 22 for pushes and pull requests. Run them locally with `npm test` and `npm run lint`.\n\n## Install for development
 
 ```sh
 npm install
