@@ -72,3 +72,18 @@ test('loads legacy version 1 data and upgrades it in memory', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('marks removed devices inactive without deleting their historical totals', () => {
+  withStore((store) => {
+    const start = new Date(2026, 10, 25, 12).getTime();
+    store.recordPower('plug-1', 100, start);
+    store.recordPower('plug-1', 100, start + 60 * 60 * 1000);
+    store.recordPower('plug-2', 50, start);
+    store.setActiveDevices(['plug-2']);
+    const summary = store.getSummary();
+    assert.equal(summary.devices['plug-1'].active, false);
+    assert.equal(summary.devices['plug-2'].active, true);
+    assert.equal(summary.devices['plug-1'].energyWh, 0);
+    assert.equal(summary.totals.daily['2026-11-25'], 100);
+  });
+});
