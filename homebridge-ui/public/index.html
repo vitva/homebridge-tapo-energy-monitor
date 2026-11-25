@@ -166,7 +166,8 @@
       const result = await homebridge.request('/tapo-cloud-test', {
         username: byId('tapo-email').value,
         password: byId('tapo-password').value,
-        mfaCode: byId('tapo-mfa').value
+        mfaCode: byId('tapo-mfa').value,
+        pythonExecutable: tapoCloudPython
       });
       status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
       const alert = document.createElement('div');
