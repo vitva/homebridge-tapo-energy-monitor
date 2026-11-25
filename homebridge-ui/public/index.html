@@ -283,6 +283,9 @@
       alert.textContent = error.message;
       resultBox.append(alert);
     } finally {
+      // Do not leave account secrets or one-time codes in the UI after a check.
+      byId('tapo-password').value = '';
+      byId('tapo-mfa').value = '';
       button.disabled = false;
     }
   }
