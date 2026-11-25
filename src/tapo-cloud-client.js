@@ -52,19 +52,19 @@ async function probeTapoThingCloud(options = {}) {
   }
   if (!login.ok) return { ...login, diagnostics };
 
+  let stage = 'thing_service';
   let stageStarted = Date.now();
   try {
     const host = await auth.discoverThingService(username, login.token);
-    diagnostic(diagnostics, 'thing_service', 'success', stageStarted);
+    diagnostic(diagnostics, stage, 'success', stageStarted);
 
+    stage = 'device_list';
     stageStarted = Date.now();
     const api = (options.apiFactory || (args => new TapoThingApi(args)))({
       host,
       token: login.token,
       termId: login.termId
     });
-
-    stageStarted = Date.now();
     const things = await api.listThings();
     const devices = things.map(normalizeThing);
     diagnostic(diagnostics, 'device_list', 'success', stageStarted, { count: devices.length });
@@ -106,9 +106,6 @@ async function probeTapoThingCloud(options = {}) {
       message: 'Авторизация и обнаружение устройств через Tapo Thing Cloud API выполнены. Отправлялись только запросы чтения.'
     };
   } catch (error) {
-    const stage = diagnostics.some(item => item.stage === 'thing_service' && item.status === 'success')
-      ? 'device_list'
-      : 'thing_service';
     diagnostic(diagnostics, stage, 'failed', stageStarted, {
       code: Number.isInteger(error?.code) ? error.code : undefined
     });
