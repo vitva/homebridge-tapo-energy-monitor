@@ -18,7 +18,7 @@
     <h5 class="mt-4">Devices</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
-        <thead><tr><th>Device</th><th>Model</th><th class="text-end">Power</th><th class="text-end">Estimated total</th><th class="text-end">Today</th></tr></thead>
+        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">Estimated total</th><th class="text-end">Today</th></tr></thead>
         <tbody id="devices"></tbody>
       </table>
     </div>
@@ -80,10 +80,10 @@
       const devices = Object.values(data.devices || {});
       const todayKey = localDay();
       const todayWh = data.totals?.daily?.[todayKey] || 0;
-      const currentPower = devices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
+      const activeDevices = devices.filter(device => device.active !== false);\n      const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
       byId('power').textContent = number(currentPower, 1) + ' W';
       byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
-      byId('count').textContent = String(devices.length);
+      byId('count').textContent = activeDevices.length + ' active';
 
       const body = byId('devices');
       body.replaceChildren();
@@ -95,7 +95,7 @@
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = number(device.powerW, 1) + ' W';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
         const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[todayKey] || 0) / 1000, 3) + ' kWh';
-        tr.append(name, model, power, total, daily); body.append(tr);
+        tr.append(name, model, status, power, total, daily); body.append(tr);
       }
 
       const periods = byId('periods');
