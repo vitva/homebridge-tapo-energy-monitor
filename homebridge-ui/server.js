@@ -36,13 +36,16 @@ const { runTapoCloudProbe } = require('../src/tapo-cloud');
       const username = typeof payload.username === 'string' ? payload.username.trim() : '';
       const password = typeof payload.password === 'string' ? payload.password : '';
       const mfaCode = typeof payload.mfaCode === 'string' ? payload.mfaCode.trim() : '';
+      const pythonExecutable = typeof payload.pythonExecutable === 'string' && payload.pythonExecutable.trim()
+        ? payload.pythonExecutable.trim()
+        : 'python3';
       if (!username || !password) {
         return { ok: false, code: 'credentials_required', message: 'Укажите email и пароль аккаунта Tapo.' };
       }
       if (username.length > 320 || password.length > 2048 || mfaCode.length > 32) {
         return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
       }
-      return runTapoCloudProbe({ username, password, mfaCode });
+      return runTapoCloudProbe({ username, password, mfaCode, pythonExecutable });
     }
   }
 
