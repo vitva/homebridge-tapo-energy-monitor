@@ -80,7 +80,8 @@
       const devices = Object.values(data.devices || {});
       const todayKey = localDay();
       const todayWh = data.totals?.daily?.[todayKey] || 0;
-      const activeDevices = devices.filter(device => device.active !== false);\n      const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
+      const activeDevices = devices.filter(device => device.active !== false);
+      const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
       byId('power').textContent = number(currentPower, 1) + ' W';
       byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
       byId('count').textContent = activeDevices.length + ' active';
@@ -92,6 +93,7 @@
         const tr = document.createElement('tr');
         const name = document.createElement('td'); name.textContent = device.name || device.id;
         const model = document.createElement('td'); model.textContent = device.model || '—';
+        const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived' : 'Active';
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = number(device.powerW, 1) + ' W';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
         const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[todayKey] || 0) / 1000, 3) + ' kWh';
