@@ -173,6 +173,46 @@
       alert.className = 'alert alert-' + (result.ok ? 'success' : 'warning');
       alert.textContent = result.message || result.code || 'Нет результата';
       resultBox.append(alert);
+      if (Array.isArray(result.diagnostics) && result.diagnostics.length) {
+        const diagnosticTitle = document.createElement('h5');
+        diagnosticTitle.textContent = 'Поэтапная диагностика';
+        resultBox.append(diagnosticTitle);
+        const diagnosticTable = document.createElement('table');
+        diagnosticTable.className = 'table table-sm';
+        const diagnosticHead = document.createElement('thead');
+        const diagnosticHeadRow = document.createElement('tr');
+        for (const label of ['Этап', 'Результат', 'Время', 'Код']) {
+          const th = document.createElement('th'); th.textContent = label; diagnosticHeadRow.append(th);
+        }
+        diagnosticHead.append(diagnosticHeadRow); diagnosticTable.append(diagnosticHead);
+        const diagnosticBody = document.createElement('tbody');
+        const stageNames = {
+          regional_server: 'Региональный сервер',
+          authentication: 'Авторизация / MFA',
+          thing_service: 'Поиск Thing API',
+          device_list: 'Список устройств',
+          usage: 'Энергопоказания P110M'
+        };
+        const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA' };
+        for (const item of result.diagnostics) {
+          const tr = document.createElement('tr');
+          for (const value of [
+            stageNames[item.stage] || item.stage,
+            statusNames[item.status] || item.status,
+            Number.isFinite(item.durationMs) ? item.durationMs + ' мс' : '—',
+            Number.isInteger(item.code) ? String(item.code) : '—'
+          ]) {
+            const td = document.createElement('td'); td.textContent = value; tr.append(td);
+          }
+          diagnosticBody.append(tr);
+        }
+        diagnosticTable.append(diagnosticBody);
+        resultBox.append(diagnosticTable);
+        const privacyNote = document.createElement('p');
+        privacyNote.className = 'small text-muted';
+        privacyNote.textContent = 'Отчёт содержит только этапы, длительность и коды ответа. Пароль, код MFA и токены в него не включаются.';
+        resultBox.append(privacyNote);
+      }
       if (result.ok) {
         const summary = document.createElement('p');
         summary.textContent = 'Найдено устройств Tapo: ' + result.deviceCount + '. P110M: ' + result.p110mCount + '.';
