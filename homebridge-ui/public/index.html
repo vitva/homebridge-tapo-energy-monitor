@@ -34,8 +34,7 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Node.js — основной проверенный транспорт; Python оставлен как резервный вариант для сравнения.</p>
-  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="node" selected>Node.js · основной проверенный вариант</option><option value="python">Python · резервный вариант</option></select></div>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Работает встроенный Node.js-клиент.</p>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
@@ -71,7 +70,6 @@
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
     const status = byId('status');
@@ -152,9 +150,6 @@
     if (!Array.isArray(config)) return;
     tapoPluginConfig = config;
     const current = tapoPluginConfig.find(item => item.platform === 'TapoEnergyMonitor');
-    tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim()
-      ? current.tapoCloudPython.trim()
-      : 'python3';
     if (current) {
       if (!byId('tapo-email').value) {
         byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
@@ -294,8 +289,6 @@
         username: credentials.username,
         password: credentials.password,
         mfaCode: byId('tapo-mfa').value,
-        pythonExecutable: tapoCloudPython,
-        transport: byId('tapo-transport').value
       });
       status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
       const alert = document.createElement('div');
