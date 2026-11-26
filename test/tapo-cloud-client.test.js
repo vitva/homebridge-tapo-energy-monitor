@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory, buildPowerDataRange } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -668,4 +668,43 @@ test('reads device usage independently and keeps its rolling periods separate fr
     { today: 13, past7: 120, past30: 420 });
   assert.equal(result.readings[0].energyUsage.today_runtime, 13);
   assert.equal(result.diagnostics.find(item => item.stage === 'device_usage').status, 'success');
+});
+
+
+test('builds bounded UTC power-history ranges for both supported granularities', () => {
+  const now = Date.UTC(2026, 10, 27, 12, 34, 56);
+  const five = buildPowerDataRange(5, now);
+  const hourly = buildPowerDataRange(60, now);
+  assert.equal(five.interval, 5);
+  assert.equal(five.end_timestamp % 300, 0);
+  assert.equal(five.end_timestamp - five.start_timestamp, 12 * 3600);
+  assert.equal(hourly.interval, 60);
+  assert.equal(hourly.end_timestamp % 3600, 0);
+  assert.equal(hourly.end_timestamp - hourly.start_timestamp, 6 * 86400);
+  assert.throws(() => buildPowerDataRange(15, now), /Unsupported Tapo power history interval/);
+});
+
+test('reads both power-history granularities independently and retains null samples', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getUsage() { return { energy_data: { data: [] } }; },
+      async getDeviceUsage() { return { time_usage: { today: 10, past7: 50, past30: 100 } }; },
+      async getPowerData(_id, _host, range) {
+        return { data: [100, 0, null, 500], start_timestamp: range.start_timestamp,
+          end_timestamp: range.end_timestamp, interval: range.interval };
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.readings[0].powerData5m.data, [100, 0, null, 500]);
+  assert.deepEqual(result.readings[0].powerDataHourly.data, [100, 0, null, 500]);
+  assert.deepEqual(result.diagnostics.filter(item => item.stage.startsWith('power_data_'))
+    .map(item => item.status), ['success', 'success']);
 });
