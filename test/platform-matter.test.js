@@ -19,11 +19,11 @@ function makePlatform(config, matter) {
   return { platform, warnings, registered, api };
 }
 
-test('registers one Matter Electrical Sensor when Matter is enabled', async () => {
+test('registers one Matter Electrical Meter when Matter is enabled', async () => {
   const registered = [];
   const matter = {
     uuid: { generate: value => 'uuid:' + value },
-    deviceTypes: { ElectricalSensor: 'ElectricalSensorType' },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
     registerPlatformAccessories: async (...args) => registered.push(args)
   };
   const { platform } = makePlatform({}, matter);
@@ -33,20 +33,24 @@ test('registers one Matter Electrical Sensor when Matter is enabled', async () =
   assert.equal(registered[0][0], 'homebridge-tapo-energy-monitor');
   assert.equal(registered[0][1], 'TapoEnergyMonitor');
   assert.equal(registered[0][2][0].displayName, 'Tapo Energy — Расчётная');
+  assert.equal(registered[0][2][0].deviceType, 'ElectricalMeterType');
 });
 
-test('skips Matter export cleanly when Matter is disabled', async () => {
-  const { platform, warnings } = makePlatform({}, undefined);
+test('skips Matter export cleanly when Electrical Meter is unavailable', async () => {
+  const { platform, warnings } = makePlatform({}, {
+    uuid: { generate: value => 'uuid:' + value },
+    deviceTypes: { ElectricalSensor: 'ElectricalSensorType' }
+  });
   await platform.registerMatterMeter();
   assert.equal(platform.matterMeterUuid, null);
-  assert.match(warnings[0], /Enable Matter on this Homebridge bridge/);
+  assert.match(warnings[0], /Homebridge 2\.5\.0 or later/);
 });
 
 test('keeps the local platform usable when Matter registration fails', async () => {
   const warnings = [];
   const matter = {
     uuid: { generate: value => 'uuid:' + value },
-    deviceTypes: { ElectricalSensor: 'ElectricalSensorType' },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
     registerPlatformAccessories: async () => { throw new Error('Matter bridge unavailable'); }
   };
   const { platform } = makePlatform({}, matter);
@@ -62,7 +66,6 @@ test('allows Matter export to be disabled in plugin settings', async () => {
   assert.equal(platform.matterMeterUuid, null);
   assert.equal(warnings.length, 0);
 });
-
 
 test('does not start when simulation is not explicitly enabled', async () => {
   const { platform, warnings } = makePlatform({}, undefined);
