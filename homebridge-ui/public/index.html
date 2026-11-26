@@ -34,8 +34,8 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Python остаётся контрольным вариантом; Node.js — дополнительный экспериментальный транспорт.</p>
-  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="python">Python · контрольный вариант</option><option value="node">Node.js · экспериментальный вариант</option></select></div>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Node.js — основной проверенный транспорт; Python оставлен как резервный вариант для сравнения.</p>
+  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="node" selected>Node.js · основной проверенный вариант</option><option value="python">Python · резервный вариант</option></select></div>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
@@ -255,13 +255,20 @@
     const config = tapoPluginConfig;
     const index = config.findIndex(item => item.platform === 'TapoEnergyMonitor');
 
-    // An empty array is valid before the singular platform has been configured.
-    // It must never prevent the cloud authentication request from running.
-    if (index < 0) return { saved: false, reason: 'platform_not_configured' };
-
-    const updated = config.map((item, itemIndex) => itemIndex === index
-      ? { ...item, tapoCloudUsername: credentials.username, tapoCloudPassword: credentials.password }
-      : item);
+    // If the custom UI was opened before the platform was added, create its
+    // minimal idle configuration so credentials can still be persisted.
+    const updated = index < 0
+      ? [...config, {
+          platform: 'TapoEnergyMonitor',
+          name: 'Tapo Energy Monitor',
+          simulationMode: false,
+          pollingIntervalSeconds: 60,
+          tapoCloudUsername: credentials.username,
+          tapoCloudPassword: credentials.password
+        }]
+      : config.map((item, itemIndex) => itemIndex === index
+        ? { ...item, tapoCloudUsername: credentials.username, tapoCloudPassword: credentials.password }
+        : item);
     await homebridge.updatePluginConfig(updated);
     tapoPluginConfig = updated;
     await homebridge.savePluginConfig();
