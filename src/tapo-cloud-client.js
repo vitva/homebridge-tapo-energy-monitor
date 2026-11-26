@@ -172,7 +172,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
-      valueUnit: 'unconfirmed',
+      valueUnit: 'Wh',
       timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
       localTime,
       localDate,
@@ -337,8 +337,88 @@ async function probeTapoThingCloud(options = {}) {
         }
         const reading = { id: item.device.id, usage };
         if (history.ok) reading.history = history;
-        readings.push(reading);
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
+
+        // Tapo exposes runtime and today's/month's counters separately from daily energy history.
+        // Keep this request independent: a missing summary must not discard valid energy_data.
+        if (typeof api.getEnergyUsage === 'function') {
+          const summaryStarted = Date.now();
+          try {
+            const energyUsage = await api.getEnergyUsage(String(item.device.id), usageHost);
+            reading.energyUsage = energyUsage;
+            const fields = ['today_energy', 'month_energy', 'today_runtime', 'month_runtime',
+              'current_power', 'local_time'];
+            const unitByField = {
+              today_energy: ' Wh',
+              month_energy: ' Wh',
+              today_runtime: ' min',
+              month_runtime: ' min',
+              current_power: ' mW'
+            };
+            const safeSummary = fields
+              .filter(key => energyUsage && energyUsage[key] !== undefined)
+              .map(key => {
+                const raw = energyUsage[key];
+                const unit = unitByField[key] || '';
+                if (key === 'current_power' && Number.isFinite(Number(raw))) {
+                  return key + '=' + String(raw) + ' mW (' + (Number(raw) / 1000).toFixed(3) + ' W)';
+                }
+                return key + '=' + String(raw) + unit;
+              })
+              .join('; ');
+            diagnostic(diagnostics, 'energy_usage', 'success', summaryStarted, {
+              count: index + 1,
+              reason: safeSummary || 'Ответ получен; известные поля сводки не найдены.'
+            });
+          } catch (error) {
+            const failure = classifyThingError(error);
+            diagnostic(diagnostics, 'energy_usage', 'failed', summaryStarted, {
+              count: index + 1,
+              errorCode: failure.errorCode,
+              httpStatus: failure.httpStatus,
+              reason: 'Не удалось получить отдельную сводку today/month energy и runtime: ' + failure.reason
+            });
+          }
+        }
+
+        if (history.ok && reading.energyUsage && typeof reading.energyUsage === 'object') {
+          const energySummary = reading.energyUsage;
+          const latestRecord = history.records.at(-1) || null;
+          const todayEnergy = Number(energySummary.today_energy);
+          const todayComparable = energySummary.today_energy !== null &&
+            energySummary.today_energy !== undefined && Number.isFinite(todayEnergy) &&
+            latestRecord && history.meta.localDate === latestRecord.date;
+          const todayCheck = todayComparable
+            ? 'today_energy=' + todayEnergy + ' Wh; последняя дневная запись=' +
+              latestRecord.value + ' Wh; разница=' + (latestRecord.value - todayEnergy) + ' Wh'
+            : 'today_energy не сопоставлен: дата последней записи=' +
+              (latestRecord?.date || '—') + '; local_date=' + (history.meta.localDate || '—');
+
+          const monthPrefix = typeof energySummary.local_time === 'string'
+            ? energySummary.local_time.slice(0, 7)
+            : '';
+          const monthRecords = monthPrefix
+            ? history.records.filter(record => record.date.startsWith(monthPrefix))
+            : [];
+          const monthSum = monthRecords.reduce((sum, record) => sum + record.value, 0);
+          const monthComplete = monthRecords.length > 0 &&
+            monthRecords[0].date === monthPrefix + '-01';
+          const monthCheck = energySummary.month_energy !== null &&
+            energySummary.month_energy !== undefined &&
+            Number.isFinite(Number(energySummary.month_energy)) && monthComplete
+            ? 'month_energy=' + Number(energySummary.month_energy) + ' Wh; сумма дневных записей=' +
+              monthSum + ' Wh; разница=' + (monthSum - Number(energySummary.month_energy)) + ' Wh'
+            : 'month_energy не сопоставлен: получено записей за месяц=' + monthRecords.length +
+              '; первая дата=' + (monthRecords[0]?.date || '—');
+
+          diagnostic(diagnostics, 'usage_crosscheck', 'success', Date.now(), {
+            count: index + 1,
+            reason: todayCheck + '; ' + monthCheck +
+              '; runtime остаётся отдельной величиной в минутах и не участвует в суммах Wh.'
+          });
+        }
+
+        readings.push(reading);
         const formatStarted = Date.now();
         diagnostic(diagnostics, 'usage_format', history.ok ? 'success' : 'failed', formatStarted, {
           count: index + 1,
@@ -347,6 +427,7 @@ async function probeTapoThingCloud(options = {}) {
               (history.meta.firstDate || '—') + ' — ' + (history.meta.lastDate || '—') +
               '; region=' + (deviceRegion || 'не найден; использован UTC') +
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
+              '; единицы=' + history.meta.valueUnit +
               '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
               '; local_time=' + (history.meta.localTime || '—') +
@@ -424,7 +505,7 @@ async function probeTapoThingCloud(options = {}) {
                   '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
                   Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
                   '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(quarterSample) +
-                  '; единицы не подтверждены.'
+                  '; значения energy_data трактуются как Wh по контракту Tapo get_energy_data.'
               });
             } catch (error) {
               const failure = classifyThingError(error);
