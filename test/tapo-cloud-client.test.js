@@ -246,3 +246,38 @@ test('includes safe transport diagnostics when a P110M usage request fails', asy
   assert.equal(result.readings[0].errorCode, 'ECONNRESET');
   assert.equal(JSON.stringify(result).includes('socket hang up'), false);
 });
+
+
+test('probes read-only P110M cloud resources and reports model service names', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com', password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() {
+        return [{ thingName: 'p1', model: 'P110M', thingModelId: 'model-1' }];
+      },
+      async getThingResource(_id, resource) {
+        return resource === 'details' ? { fwVer: '1.0', macAddress: 'should-not-appear' } : { safeField: true };
+      },
+      async getShadows(_id, _host, matter) {
+        return matter ? { shadows: [] } : { shadows: [{ state: { reported: { on: true, power: 123 } } }] };
+      },
+      async getModel() {
+        return { services: [{ serviceId: 'reverseStatus' }, { serviceId: 'clearEnergyData' }],
+          properties: [{ propertyName: 'on' }, { propertyName: 'power' }] };
+      },
+      async getUsage() { throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }); }
+    })
+  });
+  const stages = result.diagnostics.map(item => item.stage);
+  for (const stage of ['cloud_details', 'cloud_rt_info', 'cloud_settings', 'cloud_shadows',
+    'cloud_matter_shadows', 'cloud_model']) assert.ok(stages.includes(stage));
+  const model = result.diagnostics.find(item => item.stage === 'cloud_model');
+  assert.match(model.reason, /reverseStatus/);
+  assert.match(model.reason, /clearEnergyData/);
+  assert.match(model.reason, /power/);
+  assert.equal(JSON.stringify(result).includes('should-not-appear'), false);
+});
