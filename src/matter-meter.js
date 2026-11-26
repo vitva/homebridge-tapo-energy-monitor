@@ -39,6 +39,7 @@ async function updateEstimatedMeter(api, uuid, summary) {
     .filter(device => device && device.active === true)
     .reduce((total, device) => total + (Number.isFinite(device.powerW) ? device.powerW : 0), 0);
   const cumulativeEnergyWh = devices
+    .filter(device => device && device.active === true)
     .reduce((total, device) => total + (Number.isFinite(device.energyWh) ? device.energyWh : 0), 0);
 
   // Matter ElectricalPowerMeasurement uses mW; ElectricalEnergyMeasurement uses mWh.
