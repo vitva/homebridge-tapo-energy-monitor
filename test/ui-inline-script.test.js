@@ -9,7 +9,7 @@ const vm = require('node:vm');
 test('Homebridge custom UI inline script parses successfully', () => {
   const file = path.join(__dirname, '..', 'homebridge-ui', 'public', 'index.html');
   const html = fs.readFileSync(file, 'utf8');
-  const match = html.match(/<script>([\\s\\S]*?)<\\/script>/);
+  const match = html.match(/<script>([\s\S]*?)<\/script>/);
   assert.ok(match, 'custom UI script block must exist');
   assert.doesNotThrow(() => new vm.Script(match[1], { filename: file }));
 });
