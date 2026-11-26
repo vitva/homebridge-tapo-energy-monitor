@@ -58,7 +58,7 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
   assert.equal(result.p110mCount, 1);
   assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
     ['authentication', 'success'], ['thing_service', 'success'],
-    ['device_list', 'success'], ['usage', 'success']
+    ['device_list', 'success'], ['usage', 'success'], ['usage_format', 'failed']
   ]);
   assert.ok(result.diagnostics.every(item => Number.isInteger(item.durationMs) && item.durationMs >= 0));
   assert.deepEqual(result.readings, [{ id: 'p110m-1', usage: { today: 1.25, history: [] } }]);
@@ -354,7 +354,7 @@ test('maps daily energy values backward from the exclusive end date', () => {
       end_timestamp: 1795726800,
       interval: 1440
     }
-  }, 'Europe/Helsinki');
+  }, 'Europe/Moscow');
 
   assert.equal(parsed.ok, true);
   assert.equal(parsed.records.length, 91);
