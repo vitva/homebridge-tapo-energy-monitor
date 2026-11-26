@@ -31,6 +31,7 @@ function classifyThingError(error) {
   const code = typeof error?.code === 'string' ? error.code : '';
   const status = Number.isInteger(error?.statusCode) ? error.statusCode : undefined;
   if (status) return { errorCode: 'HTTP_' + status, httpStatus: status, reason: 'Сервер Thing API вернул HTTP ' + status + '.' };
+  if (Number.isInteger(error?.code)) return { errorCode: 'TAPO_API_ERROR', reason: 'Thing API вернул код ошибки ' + error.code + '.' };
   if (code === 'ETIMEDOUT' || /timed out|timeout/i.test(error?.message || '')) return { errorCode: 'ETIMEDOUT', reason: 'Истекло время ожидания ответа Thing API.' };
   if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { errorCode: code, reason: 'Не удалось найти адрес сервера Thing API (DNS).' };
   if (code === 'ECONNRESET' || code === 'EPIPE') return { errorCode: code, reason: 'Сервер или сеть неожиданно разорвали соединение.' };
