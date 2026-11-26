@@ -243,6 +243,21 @@ class TapoThingApi {
     return payload.data ?? payload;
   }
 
+  async getDeviceUsage(thingName, thingHost = this.host) {
+    const host = validateThingHost(thingHost);
+    const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
+    const body = JSON.stringify({ method: 'get_device_usage', params: {} });
+    const payload = await requestJson(url, {
+      request: this.request,
+      caPath: this.caPath,
+      timeoutMs: this.timeoutMs,
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      method: 'POST',
+      body
+    });
+    return payload.data ?? payload;
+  }
+
   async getEnergyUsage(thingName, thingHost = this.host) {
     const host = validateThingHost(thingHost);
     const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
