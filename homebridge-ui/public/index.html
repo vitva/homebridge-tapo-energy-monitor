@@ -317,6 +317,8 @@
           usage: 'Энергопоказания P110M',
           energy_usage: 'Сводка: Wh и минуты работы',
           device_usage: 'Сводка: today / past7 / past30',
+          power_data_5m: 'История мощности: 5 минут / 12 часов',
+          power_data_hourly: 'История мощности: 1 час / 6 дней',
           usage_crosscheck: 'Сверка дневной и месячной энергии',
           usage_format: 'Разбор дневной истории'
         };
@@ -390,7 +392,7 @@
             pre.className = 'small bg-light p-2 mt-2';
             pre.style.maxHeight = '320px';
             pre.style.overflow = 'auto';
-            pre.textContent = JSON.stringify({ energy_usage: reading.energyUsage || null, energy_data: reading.usage }, null, 2);
+            pre.textContent = JSON.stringify({ energy_usage: reading.energyUsage || null, device_usage: reading.deviceUsage || null, energy_data: reading.usage, power_data_5m: reading.powerData5m || null, power_data_hourly: reading.powerDataHourly || null }, null, 2);
             details.append(summary, pre);
             detailCell.append(details);
             detailRow.append(detailCell);
