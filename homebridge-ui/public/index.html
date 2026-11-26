@@ -47,6 +47,17 @@
   </div>
   <div id="tapo-test-result" class="mt-3" aria-live="polite"></div>
   <hr class="my-4">
+  <hr class="my-4">
+  <h5>Импорт контрольной истории Watt</h5>
+  <p class="text-muted small">CSV хранится отдельно от рабочих показаний и Matter-счётчика. Повторный импорт заменяет предыдущую выгрузку того же типа.</p>
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-3"><label class="form-label" for="watt-kind">Тип выгрузки</label><select id="watt-kind" class="form-select"><option value="individual">Одно устройство</option><option value="aggregate">Все устройства</option></select></div>
+    <div class="col-12 col-md-3" id="watt-label-wrap"><label class="form-label" for="watt-label">Название устройства</label><input id="watt-label" class="form-control" type="text" value="P110M"></div>
+    <div class="col-12 col-md-4"><label class="form-label" for="watt-file">CSV из Watt</label><input id="watt-file" class="form-control" type="file" accept=".csv,text/csv"></div>
+    <div class="col-12 col-md-2"><button id="watt-import" class="btn btn-primary w-100" type="button">Импортировать</button></div>
+  </div>
+  <div id="watt-status" class="small mt-2" role="status"></div>
+  <div id="watt-results" class="mt-3"></div>
   <h5>Platform settings</h5>
   <p class="text-muted small">Configure simulation devices and polling below. Cloud diagnostics do not yet feed the energy-history totals.</p>
   <div id="settings-form"></div>
