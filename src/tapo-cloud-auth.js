@@ -1,6 +1,7 @@
 'use strict';
 
 const https = require('node:https');
+const tls = require('node:tls');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -103,7 +104,7 @@ function postJson(url, bodyJson, headers, options = {}) {
         ...headers
       },
       timeout: timeoutMs,
-      ca: options.ca || fs.readFileSync(options.caPath || TP_LINK_CA_PATH),
+      ca: options.ca || [...tls.rootCertificates, fs.readFileSync(options.caPath || TP_LINK_CA_PATH)],
       rejectUnauthorized: true
     }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400) {
