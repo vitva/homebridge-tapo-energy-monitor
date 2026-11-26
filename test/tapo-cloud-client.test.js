@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -38,8 +38,8 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
           { thingName: 'p110-1', model: 'P110' }
         ];
       },
-      async getUsage(id, host) {
-        calls.push(['usage', id, host]);
+      async getUsage(id, host, range) {
+        calls.push(['usage', id, host, range]);
         return { today: 1.25, history: [] };
       }
     };
@@ -65,9 +65,12 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
   assert.deepEqual(calls.map(call => call[0]), ['login', 'discover', 'api', 'list', 'usage']);
   assert.equal(calls[1][2], 'session-secret');
   assert.equal(calls[2][1].token, 'session-secret');
-  assert.deepEqual(calls[4], [
+  assert.deepEqual(calls[4].slice(0, 3), [
     'usage', 'p110m-1', 'https://us-app-server.iot.i.tplinkcloud.com'
   ]);
+  assert.equal(calls[4][3].interval, 1440);
+  assert.ok(Number.isSafeInteger(calls[4][3].start_timestamp));
+  assert.ok(calls[4][3].end_timestamp > calls[4][3].start_timestamp);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
 
@@ -260,7 +263,9 @@ test('probes read-only P110M cloud resources and reports model service names', a
         return [{ thingName: 'p1', model: 'P110M', thingModelId: 'model-1' }];
       },
       async getThingResource(_id, resource) {
-        return resource === 'details' ? { fwVer: '1.0', macAddress: 'should-not-appear' } : { safeField: true };
+        if (resource === 'details') return { fwVer: '1.0', macAddress: 'should-not-appear' };
+        if (resource === 'settings') return { region: 'Europe/Helsinki' };
+        return { safeField: true };
       },
       async getShadows(_id, _host, matter) {
         return matter ? { shadows: [] } : { shadows: [{ state: { reported: { on: true, power: 123 } } }] };
@@ -269,7 +274,15 @@ test('probes read-only P110M cloud resources and reports model service names', a
         return { services: [{ serviceId: 'reverseStatus' }, { serviceId: 'clearEnergyData' }],
           properties: [{ propertyName: 'on' }, { propertyName: 'power' }] };
       },
-      async getUsage() { throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' }); }
+      async getUsage(_id, _host, range) {
+        assert.equal(range.interval, 1440);
+        const localEnd = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Helsinki', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+        }).format(new Date(range.end_timestamp * 1000));
+        assert.match(localEnd, /00:00/);
+        throw Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' });
+      }
     })
   });
   const stages = result.diagnostics.map(item => item.stage);
@@ -280,4 +293,28 @@ test('probes read-only P110M cloud resources and reports model service names', a
   assert.match(model.reason, /clearEnergyData/);
   assert.match(model.reason, /power/);
   assert.equal(JSON.stringify(result).includes('should-not-appear'), false);
+});
+
+
+test('builds daily energy history timestamps in the device timezone across DST', () => {
+  const now = Date.UTC(2026, 10, 26, 12, 0, 0);
+  const range = buildDailyUsageRange('Europe/Helsinki', now, 60);
+  assert.equal(range.interval, 1440);
+  assert.ok(range.end_timestamp > range.start_timestamp);
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Helsinki',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  });
+  assert.match(formatter.format(new Date(range.start_timestamp * 1000)), /00:00$/);
+  assert.match(formatter.format(new Date(range.end_timestamp * 1000)), /00:00$/);
+  assert.equal(Math.round((range.end_timestamp - range.start_timestamp) / 86400), 61);
+});
+
+test('falls back to UTC for a missing or invalid device timezone', () => {
+  const now = Date.UTC(2026, 10, 26, 12, 0, 0);
+  const missing = buildDailyUsageRange(null, now, 60);
+  const invalid = buildDailyUsageRange('not/a-timezone', now, 60);
+  assert.deepEqual(invalid, missing);
+  assert.equal(new Date(missing.end_timestamp * 1000).toISOString(), '2026-11-27T00:00:00.000Z');
 });
