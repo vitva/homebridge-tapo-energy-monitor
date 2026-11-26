@@ -233,3 +233,44 @@ test('reads the separate Tapo energy and runtime summary through the Thing usage
   assert.equal(usage.today_runtime, 0);
   assert.equal(usage.current_power, 12500);
 });
+
+
+test('reads the separate rolling device usage summary through the Thing usage endpoint', async () => {
+  let call;
+  const fakeRequest = (url, options, callback) => {
+    call = { url: String(url), method: options.method, body: null };
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const req = new EventEmitter();
+    req.end = body => {
+      call.body = body;
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding = () => {};
+      callback(response);
+      response.end(JSON.stringify({
+        error_code: 0,
+        data: {
+          time_usage: { today: 62, past7: 410, past30: 1720 },
+          power_usage: { today: 296, past7: 1880, past30: 7400 },
+          saved_power: { today: 0, past7: 0, past30: 0 }
+        }
+      }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token',
+    termId: 'test-term',
+    request: fakeRequest,
+    caPath: require('node:path').join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')
+  });
+  const usage = await client.getDeviceUsage('p110m-1');
+  assert.equal(call.method, 'POST');
+  assert.ok(call.url.endsWith('/v1/things/p110m-1/usage'));
+  assert.deepEqual(JSON.parse(call.body), { method: 'get_device_usage', params: {} });
+  assert.deepEqual(usage.time_usage, { today: 62, past7: 410, past30: 1720 });
+  assert.deepEqual(usage.power_usage, { today: 296, past7: 1880, past30: 7400 });
+});
