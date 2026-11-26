@@ -7,6 +7,7 @@ const { PassThrough } = require('node:stream');
 const path = require('node:path');
 const fs = require('node:fs');
 const tls = require('node:tls');
+const { X509Certificate } = require('node:crypto');
 const { TapoCloudAuth, validateCloudBase, signBody } = require('../src/tapo-cloud-auth');
 
 test('accepts only HTTPS TP-Link cloud base URLs', () => {
@@ -350,4 +351,19 @@ test('redacts MFA values and limits TP-Link server diagnostic text', async () =>
   assert.match(rejection.reason, /Invalid code/);
   assert.equal(JSON.stringify(diagnostics).includes('654321'), false);
   assert.equal(JSON.stringify(diagnostics).includes('private@example.com'), false);
+});
+
+
+test('bundles the TP-Link Cloud Server intermediate and its issuing root CA', () => {
+  const pem = fs.readFileSync(path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem'), 'utf8');
+  const certificates = [...pem.matchAll(/-----BEGIN CERTIFICATE-----[\\s\\S]+?-----END CERTIFICATE-----/g)]
+    .map(match => new X509Certificate(match[0]));
+  assert.equal(certificates.length, 2);
+  const [intermediate, root] = certificates;
+  assert.match(intermediate.subject, /CN=TP-Link Cloud Server CA/);
+  assert.match(intermediate.issuer, /CN=TP-Link Cloud Root CA/);
+  assert.equal(intermediate.issuer, root.subject);
+  assert.equal(root.subject, root.issuer);
+  assert.equal(intermediate.verify(root.publicKey), true);
+  assert.equal(root.verify(root.publicKey), true);
 });
