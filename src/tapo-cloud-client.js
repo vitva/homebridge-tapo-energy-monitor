@@ -394,15 +394,21 @@ async function probeTapoThingCloud(options = {}) {
             : 'today_energy не сопоставлен: дата последней записи=' +
               (latestRecord?.date || '—') + '; local_date=' + (history.meta.localDate || '—');
 
-          const monthPrefix = typeof energySummary.local_time === 'string'
-            ? energySummary.local_time.slice(0, 7)
+          const localTime = typeof energySummary.local_time === 'string'
+            ? energySummary.local_time
             : '';
+          const localDate = /^\\d{4}-\\d{2}-\\d{2}/.test(localTime)
+            ? localTime.slice(0, 10)
+            : '';
+          const monthPrefix = localDate ? localDate.slice(0, 7) : '';
           const monthRecords = monthPrefix
             ? history.records.filter(record => record.date.startsWith(monthPrefix))
             : [];
           const monthSum = monthRecords.reduce((sum, record) => sum + record.value, 0);
-          const monthComplete = monthRecords.length > 0 &&
-            monthRecords[0].date === monthPrefix + '-01';
+          const localDay = localDate ? Number(localDate.slice(8, 10)) : 0;
+          const monthComplete = localDay > 0 && monthRecords.length === localDay &&
+            monthRecords.every((record, recordIndex) =>
+              record.date === monthPrefix + '-' + String(recordIndex + 1).padStart(2, '0'));
           const monthCheck = energySummary.month_energy !== null &&
             energySummary.month_energy !== undefined &&
             Number.isFinite(Number(energySummary.month_energy)) && monthComplete
