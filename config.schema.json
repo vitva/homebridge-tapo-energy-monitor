@@ -89,8 +89,7 @@
         "type": "string",
         "format": "password",
         "description": "Stored in plain text in Homebridge config.json. Keep the file and backups private."
-      },
-
+      }
     },
     "required": [
       "name",
