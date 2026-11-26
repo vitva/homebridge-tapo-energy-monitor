@@ -1,6 +1,6 @@
 {
   "name": "homebridge-tapo-energy-monitor",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "description": "Cloud-based Tapo energy monitoring and consumption history for Homebridge",
   "main": "index.js",
   "scripts": {
