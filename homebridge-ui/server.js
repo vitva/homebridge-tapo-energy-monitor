@@ -77,7 +77,7 @@ const { parseWattCsv } = require('../src/watt-csv');
       const pythonExecutable = typeof payload.pythonExecutable === 'string' && payload.pythonExecutable.trim()
         ? payload.pythonExecutable.trim()
         : 'python3';
-      const transport = payload.transport === 'node' ? 'node' : 'python';
+      const transport = payload.transport === 'python' ? 'python' : 'node';
       if (!username || !password) {
         return { ok: false, code: 'credentials_required', message: 'Укажите email и пароль аккаунта Tapo.' };
       }
