@@ -36,7 +36,8 @@ The implementation plan is therefore:
 - use the Tapo Thing Cloud `/usage` endpoint for read-only live power and history;
 - test P110M first; do not assume P110 support automatically means P110M support;
 - keep S112 and S110E readings unavailable until their cloud-relayed model-specific responses are verified;
-- store the Tapo email and password in the Homebridge platform config for reuse after restarts; the password is plain text in `config.json`, so protect that file and its backups;\n- never write credentials, MFA codes or session tokens to plugin logs or diagnostic reports; keep session tokens in memory only;
+- store the Tapo email and password in the Homebridge platform config for reuse after restarts; the password is plain text in `config.json`, so protect that file and its backups;
+- never write credentials, MFA codes or session tokens to plugin logs or diagnostic reports; keep session tokens in memory only;
 - label every value by source (cloud device history, cloud meter counter, estimated from power, or unavailable);
 - never fill missing/offline periods with invented values or mix real and estimated values.
 
