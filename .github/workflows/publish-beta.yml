@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_publish:
-        description: Publish this beta package to npm
+        description: Stage this beta package for npm approval
         required: true
         type: boolean
         default: false
@@ -35,7 +35,9 @@ jobs:
       - run: npm run lint
       - name: Verify package contents
         run: npm pack --dry-run
-      - name: Publish beta
-        run: npm publish --access public --tag beta
+      - name: Install npm CLI with staged publishing support
+        run: npm install --global npm@11.21.3
+      - name: Stage beta for approval
+        run: npm stage publish --access public --tag beta
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
