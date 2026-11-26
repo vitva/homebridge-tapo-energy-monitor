@@ -92,6 +92,30 @@ test('falls back to the discovered Thing host when a device has no appServerUrlV
   assert.equal(usageHost, 'https://eu-app-server.iot.i.tplinkcloud.com');
 });
 
+test('prefers the per-device appServerUrl returned by Tapo', async () => {
+  let usageHost;
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() {
+        return [{
+          thingName: 'p1',
+          model: 'P110M',
+          appServerUrl: 'https://euw1-app-server.iot.i.tplinknbu.com'
+        }];
+      },
+      async getUsage(_id, host) { usageHost = host; return { energy_data: { data: [] } }; }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(usageHost, 'https://euw1-app-server.iot.i.tplinknbu.com');
+});
+
 test('returns MFA challenge without attempting Thing API calls', async () => {
   let apiCreated = false;
   const result = await probeTapoThingCloud({
