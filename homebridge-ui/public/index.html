@@ -146,23 +146,34 @@
     }
   }
 
+  let tapoPluginConfig = [];
+
+  function syncTapoPluginConfig(config) {
+    if (!Array.isArray(config)) return;
+    tapoPluginConfig = config;
+    const current = tapoPluginConfig.find(item => item.platform === 'TapoEnergyMonitor');
+    tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim()
+      ? current.tapoCloudPython.trim()
+      : 'python3';
+    if (current) {
+      if (!byId('tapo-email').value) {
+        byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
+      }
+      if (!byId('tapo-password').value) {
+        byId('tapo-password').value = typeof current.tapoCloudPassword === 'string' ? current.tapoCloudPassword : '';
+      }
+    }
+  }
+
   async function init() {
     try {
       const config = await homebridge.getPluginConfig();
-      const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
-      tapoCloudPython = platform && typeof platform.tapoCloudPython === 'string' && platform.tapoCloudPython.trim() ? platform.tapoCloudPython.trim() : 'python3';
-      byId('tapo-email').value = platform && typeof platform.tapoCloudUsername === 'string' ? platform.tapoCloudUsername : '';
-      byId('tapo-password').value = platform && typeof platform.tapoCloudPassword === 'string' ? platform.tapoCloudPassword : '';
-      homebridge.showSchemaForm();
+      syncTapoPluginConfig(config);
+      // Subscribe before showing the schema form so its first configChanged event is not missed.
       homebridge.addEventListener('configChanged', (event) => {
-        const updated = event.data || [];
-        const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
-        tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
-        if (current) {
-          byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
-          byId('tapo-password').value = typeof current.tapoCloudPassword === 'string' ? current.tapoCloudPassword : '';
-        }
+        syncTapoPluginConfig(event.data || []);
       });
+      homebridge.showSchemaForm();
       await refresh();
       await refreshWattImports();
       window.setInterval(refresh, 15000);
@@ -229,20 +240,32 @@
     }
   }
 
-  async function saveTapoCredentials() {
+  function readTapoCredentials() {
     const username = byId('tapo-email').value.trim();
     const password = byId('tapo-password').value;
     if (!username || !password) throw new Error('Укажите email и пароль аккаунта Tapo.');
+    return { username, password };
+  }
 
-    const config = await homebridge.getPluginConfig();
-    const index = (config || []).findIndex(item => item.platform === 'TapoEnergyMonitor');
-    if (index < 0) throw new Error('Не найдена конфигурация платформы Tapo Energy Monitor.');
+  async function saveTapoCredentials(credentials) {
+    const currentConfig = await homebridge.getPluginConfig();
+    if (Array.isArray(currentConfig) && currentConfig.length) {
+      tapoPluginConfig = currentConfig;
+    }
+    const config = tapoPluginConfig;
+    const index = config.findIndex(item => item.platform === 'TapoEnergyMonitor');
+
+    // An empty array is valid before the singular platform has been configured.
+    // It must never prevent the cloud authentication request from running.
+    if (index < 0) return { saved: false, reason: 'platform_not_configured' };
 
     const updated = config.map((item, itemIndex) => itemIndex === index
-      ? { ...item, tapoCloudUsername: username, tapoCloudPassword: password }
+      ? { ...item, tapoCloudUsername: credentials.username, tapoCloudPassword: credentials.password }
       : item);
     await homebridge.updatePluginConfig(updated);
-    return { username, password };
+    tapoPluginConfig = updated;
+    await homebridge.savePluginConfig();
+    return { saved: true };
   }
 
   async function testTapoCloud() {
@@ -254,8 +277,11 @@
     resultBox.replaceChildren();
     let persistCredentials = false;
     let retainCredentialsForMfa = false;
+    let credentials = null;
+    let credentialsSaved = false;
     try {
-      const credentials = await saveTapoCredentials();
+      credentials = readTapoCredentials();
+      // Authenticate first. Config persistence is a separate step and must not block the API.
       persistCredentials = true;
       const result = await homebridge.request('/tapo-cloud-test', {
         username: credentials.username,
@@ -393,15 +419,18 @@
       resultBox.append(alert);
     } finally {
       // Save only after the check has finished; a pending MFA challenge keeps the settings modal open.
-      if (persistCredentials) {
+      if (persistCredentials && credentials) {
         try {
-          await homebridge.savePluginConfig();
-          status.textContent += ' · данные аккаунта сохранены';
+          const saved = await saveTapoCredentials(credentials);
+          credentialsSaved = saved.saved;
+          status.textContent += saved.saved
+            ? ' · данные аккаунта сохранены'
+            : ' · проверка выполнена, но платформа ещё не настроена — данные не сохранены';
         } catch (saveError) {
           status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
         }
       }
-      if (!retainCredentialsForMfa) {
+      if (!retainCredentialsForMfa && credentialsSaved) {
         byId('tapo-password').value = '';
       }
       byId('tapo-mfa').value = '';
