@@ -65,6 +65,14 @@ For example, the configured executable would be `/path/to/tapo-cloud-venv/bin/py
 
 This is a connectivity diagnostic, not production polling. A successful login and device listing do not prove that the P110M `/usage` response contains valid current power and history. The Node.js client currently returns the vendor payload without interpreting it; test fixtures are deliberately synthetic and do not describe the real TP-Link schema. The returned structure must be captured from a real account and checked for field names, units, time zone, historical bucket semantics, and counter behavior before wiring it into the store.
 
+### Watt CSV reference imports
+
+The custom UI can import a Watt daily-history CSV as either an **individual device** reference set or an **all-devices aggregate** reference set. These imports are stored separately in `tapo-watt-imports.json`; they do not alter the live energy store, simulation values, or Matter meter. Re-importing a category replaces that reference set rather than adding duplicate rows. The importer validates dates, non-negative Wh values and duplicate days, and calculates daily/monthly/yearly totals.
+
+The date bucket deliberately uses the calendar date printed at the start of Watt's `Date` field, rather than converting its timestamp to the Homebridge host timezone. This preserves Watt's exported daily label (for example, `2026-10-26 21:00:00 +0000`) and avoids shifting a daily total into the next date. The `Runtime (Minute)` column is retained but is not used in energy calculations.
+
+Individual and aggregate imports are comparison/reference data only. The aggregate must never be added to the individual-device total; doing so would double-count. These files are useful as regression fixtures when validating the future cloud-history parser.
+
 ## Planned physical devices
 
 - Tapo P110M
