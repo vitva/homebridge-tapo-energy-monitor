@@ -150,11 +150,12 @@ class TapoThingApi {
     throw new Error('TP-Link Thing API pagination limit reached.');
   }
 
-  async getUsage(thingName) {
+  async getUsage(thingName, thingHost = this.host) {
     if (typeof thingName !== 'string' || !thingName.trim() || thingName.length > 512) {
       throw new Error('A valid Thing device identifier is required.');
     }
-    const url = new URL('/v1/things/' + encodeURIComponent(thingName) + '/usage', this.host);
+    const host = validateThingHost(thingHost);
+    const url = new URL('/v1/things/' + encodeURIComponent(thingName) + '/usage', host);
     const payload = await this.getJson(url);
     return payload.data ?? payload;
   }
