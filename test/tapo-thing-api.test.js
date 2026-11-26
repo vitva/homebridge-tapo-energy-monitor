@@ -22,7 +22,7 @@ test('rejects malformed and non-zero API error payloads', () => {
   assert.throws(() => cloudApiError({ error_code: -20651 }), /error \(-20651\)/);
 });
 
-test('Thing API exposes only read-only GET endpoints and parses usage data', async () => {
+test('Thing API exposes only read-only GET endpoints and preserves the raw usage payload', async () => {
   const calls = [];
   const fakeRequest = (url, options, callback) => {
     calls.push({ url: String(url), method: options.method, headers: options.headers });
@@ -36,7 +36,7 @@ test('Thing API exposes only read-only GET endpoints and parses usage data', asy
       callback(response);
       response.end(JSON.stringify(calls.length === 1
         ? { error_code: 0, total: 1, data: [{ thingName: 'thing-1', model: 'P110M' }] }
-        : { error_code: 0, data: { power: 42, history: [] } }));
+        : { error_code: 0, data: { opaqueVendorField: { sample: 'fixture-only' }, records: [{ value: 42 }] } }));
     };
     req.destroy = error => { if (error) req.emit('error', error); };
     return req;
@@ -51,7 +51,7 @@ test('Thing API exposes only read-only GET endpoints and parses usage data', asy
   const things = await client.listThings();
   assert.equal(things[0].thingName, 'thing-1');
   const usage = await client.getUsage('thing/1');
-  assert.deepEqual(usage, { power: 42, history: [] });
+  assert.deepEqual(usage, { opaqueVendorField: { sample: 'fixture-only' }, records: [{ value: 42 }] });
   assert.equal(calls.length, 2);
   assert.ok(calls.every(call => call.method === 'GET'));
   assert.ok(calls[0].url.includes('/v2/things?'));
