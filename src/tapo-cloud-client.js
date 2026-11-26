@@ -397,7 +397,7 @@ async function probeTapoThingCloud(options = {}) {
           const localTime = typeof energySummary.local_time === 'string'
             ? energySummary.local_time
             : '';
-          const localDate = /^\\d{4}-\\d{2}-\\d{2}/.test(localTime)
+          const localDate = /^\d{4}-\d{2}-\d{2}/.test(localTime)
             ? localTime.slice(0, 10)
             : '';
           const monthPrefix = localDate ? localDate.slice(0, 7) : '';
