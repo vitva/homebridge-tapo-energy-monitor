@@ -557,7 +557,7 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
           energy_data: {
             data: [296],
             start_timestamp: 1795813200,
-            end_timestamp: 1795903200,
+            end_timestamp: 1795899600,
             local_time: '2026-11-27 00:55:00',
             interval: 1440
           }
