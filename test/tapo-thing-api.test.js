@@ -71,7 +71,7 @@ test('Thing API lists with GET and reads energy history with Watt-compatible POS
     method: 'get_energy_data',
     params: { end_timestamp: 1736812800, interval: 1440, start_timestamp: 1730422800 }
   });
-  assert.equal(calls[1].headers['Content-Type'], 'application/json; charset=UTF-8');
+  assert.equal(calls[1].headers['Content-Type'], 'application/json');
   assert.equal(Number(calls[1].headers['Content-Length']), Buffer.byteLength(calls[1].body));
   assert.equal(calls[0].headers.Authorization, 'ut|test-token');
 });
