@@ -88,6 +88,62 @@ function buildDailyUsageRange(region, now = Date.now(), days = 60) {
   };
 }
 
+
+function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
+  const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
+  if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
+      !Number.isInteger(energyData.end_timestamp) || energyData.interval !== 1440 ||
+      !energyData.data.every(value => Number.isFinite(value) && value >= 0)) {
+    return { ok: false, reason: 'Ответ не соответствует формату дневной истории energy_data.' };
+  }
+
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }
+
+  const endParts = Object.fromEntries(
+    formatter.formatToParts(new Date(energyData.end_timestamp * 1000))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  );
+  const endBoundary = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+  const records = energyData.data.map((value, index) => {
+    const day = new Date(endBoundary - (energyData.data.length - index) * 86400000);
+    return { date: day.toISOString().slice(0, 10), value };
+  });
+  const requestedDays = Number.isInteger(energyData.start_timestamp)
+    ? Math.round((energyData.end_timestamp - energyData.start_timestamp) / 86400)
+    : null;
+
+  return {
+    ok: true,
+    records,
+    meta: {
+      count: records.length,
+      firstDate: records[0]?.date || null,
+      lastDate: records.at(-1)?.date || null,
+      requestedDays,
+      returnedDays: records.length,
+      rangeMismatch: requestedDays !== null && requestedDays !== records.length,
+      dateBasis: 'end_timestamp',
+      valueUnit: 'unconfirmed'
+    }
+  };
+}
+
 function summarizeCloudResource(kind, payload) {
   if (!payload || typeof payload !== 'object') return 'Ответ получен; структура не распознана.';
   if (kind === 'shadows' || kind === 'matter_shadows') {
@@ -216,8 +272,18 @@ async function probeTapoThingCloud(options = {}) {
       const usageStarted = Date.now();
       try {
         const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
-        readings.push({ id: item.device.id, usage });
+        const history = normalizeDailyEnergyHistory(usage, deviceRegion || 'UTC');
+        readings.push({ id: item.device.id, usage, history: history.ok ? history : null });
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
+        const formatStarted = Date.now();
+        diagnostic(diagnostics, 'usage_format', history.ok ? 'success' : 'failed', formatStarted, {
+          count: index + 1,
+          reason: history.ok
+            ? 'Распознано точек: ' + history.meta.count + '; даты: ' +
+              (history.meta.firstDate || '—') + ' — ' + (history.meta.lastDate || '—') +
+              (history.meta.rangeMismatch ? '; длина массива не совпадает с запрошенным диапазоном.' : '.')
+            : history.reason
+        });
       } catch (error) {
         const failure = classifyThingError(error);
         readings.push({
@@ -263,4 +329,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, normalizeDailyEnergyHistory };
