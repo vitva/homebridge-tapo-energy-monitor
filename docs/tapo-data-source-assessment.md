@@ -41,13 +41,13 @@ This is a private, reverse-engineered API, not a stable official public endpoint
 ## Current diagnostic implementation
 
 The plugin now:
-1. Authenticates with the Tapo account using the Python `tplink-cloud-api` client.
+1. Authenticates with the Tapo account using its built-in Node.js Tapo V2 client.
 2. Resolves the Thing API service endpoint.
 3. Lists devices through `/v2/things`.
 4. Finds P110M devices by cloud model metadata.
 5. Requests only `GET /v1/things/{thingName}/usage` and displays the returned usage JSON in the Homebridge UI.
 
-The helper uses a pinned TP-Link Cloud Server CA for Thing API TLS verification, validates the Thing API hostname, disables redirects for Thing API GET requests, and has no LAN fallback. It sends no relay, power, reboot, reset, or configuration commands. Credentials are passed from the UI to the helper over stdin; tokens are not persisted. The certificate is sourced from the public research implementation at https://github.com/yude/tplink-tapo-power-grafana-cloud (certificate data only; no source implementation is copied).
+The Node.js client uses a pinned TP-Link Cloud Server CA for Thing API TLS verification, validates the Thing API hostname, disables redirects for Thing API GET requests, and has no LAN fallback. It sends no relay, power, reboot, reset, or configuration commands. Credentials remain in the in-memory request flow; tokens are not persisted. The certificate is sourced from the public research implementation at https://github.com/yude/tplink-tapo-power-grafana-cloud (certificate data only; no source implementation is copied).
 
 This code has not yet been exercised against the user's TP-Link account or P110M. A successful login and P110M discovery are not enough: the returned usage response must be checked for current power, history structure, units, time zone, and counter semantics before enabling production aggregation.
 
@@ -85,4 +85,4 @@ The upstream docs list P110M as a tested model. The changelog records a real P11
 
 Protocol note: recent firmware may use TPAP when Tapo's Third-Party Compatibility option is off. The upstream library added TPAP support in v0.11.1 and selects the protocol automatically. Do not tell the user to weaken this security setting as a default workaround.
 
-Integration note: upstream provides Rust and Python (PyO3) clients, not a supported first-party Node.js wrapper. A tiny Node package claiming python-kasa API compatibility was found but is very new and has almost no adoption; it is not a sound production dependency for this plugin.
+Integration note: this plugin uses its own Node.js implementation of the required Tapo cloud authentication and Thing API calls; it does not shell out to another language or require an external cloud client runtime.

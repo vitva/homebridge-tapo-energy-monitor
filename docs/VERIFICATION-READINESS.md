@@ -26,7 +26,7 @@ Request process: https://github.com/homebridge/plugins
 
 ## Blocking work before requesting verification
 
-1. Integrate the experimental Node.js Tapo cloud transport into production polling so users do not need to install Python separately; keep Python as a reference diagnostic until parity is proven.
+1. Integrate the Node.js Tapo cloud client into production polling and validate it against a real account.
 2. Validate P110M response fields, units, timezone, historical bucket semantics and offline behavior against a real account.
 3. Implement S112 and S110E only after their cloud data contracts are verified; clearly report unsupported models.
 4. Connect verified cloud readings to the aggregator while keeping measured and estimated totals separate.

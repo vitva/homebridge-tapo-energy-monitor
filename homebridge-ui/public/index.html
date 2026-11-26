@@ -34,8 +34,7 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Node.js — основной проверенный транспорт; Python оставлен как резервный вариант для сравнения.</p>
-  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="node" selected>Node.js · основной проверенный вариант</option><option value="python">Python · резервный вариант</option></select></div>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль сохраняются в config.json Homebridge до начала авторизации, поэтому остаются на месте даже при запросе MFA или временной ошибке TP-Link. После перезапуска поля заполняются автоматически; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Работает встроенный Node.js-клиент.</p>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
@@ -71,7 +70,6 @@
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
     const status = byId('status');
@@ -152,9 +150,6 @@
     if (!Array.isArray(config)) return;
     tapoPluginConfig = config;
     const current = tapoPluginConfig.find(item => item.platform === 'TapoEnergyMonitor');
-    tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim()
-      ? current.tapoCloudPython.trim()
-      : 'python3';
     if (current) {
       if (!byId('tapo-email').value) {
         byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
@@ -249,14 +244,9 @@
 
   async function saveTapoCredentials(credentials) {
     const currentConfig = await homebridge.getPluginConfig();
-    if (Array.isArray(currentConfig) && currentConfig.length) {
-      tapoPluginConfig = currentConfig;
-    }
-    const config = tapoPluginConfig;
-    const index = config.findIndex(item => item.platform === 'TapoEnergyMonitor');
+    const config = Array.isArray(currentConfig) ? currentConfig : tapoPluginConfig;
+    const index = config.findIndex(item => item && item.platform === 'TapoEnergyMonitor');
 
-    // If the custom UI was opened before the platform was added, create its
-    // minimal idle configuration so credentials can still be persisted.
     const updated = index < 0
       ? [...config, {
           platform: 'TapoEnergyMonitor',
@@ -269,9 +259,23 @@
       : config.map((item, itemIndex) => itemIndex === index
         ? { ...item, tapoCloudUsername: credentials.username, tapoCloudPassword: credentials.password }
         : item);
+
     await homebridge.updatePluginConfig(updated);
-    tapoPluginConfig = updated;
     await homebridge.savePluginConfig();
+
+    // Read back the saved configuration; never report success based only on
+    // updatePluginConfig/savePluginConfig completing without an exception.
+    const savedConfig = await homebridge.getPluginConfig();
+    const savedPlatform = Array.isArray(savedConfig)
+      ? savedConfig.find(item => item && item.platform === 'TapoEnergyMonitor')
+      : null;
+    if (!savedPlatform ||
+        savedPlatform.tapoCloudUsername !== credentials.username ||
+        savedPlatform.tapoCloudPassword !== credentials.password) {
+      throw new Error('Homebridge не подтвердил сохранение логина и пароля в config.json.');
+    }
+
+    tapoPluginConfig = savedConfig;
     return { saved: true };
   }
 
@@ -280,28 +284,41 @@
     const status = byId('tapo-test-status');
     const resultBox = byId('tapo-test-result');
     button.disabled = true;
-    status.textContent = 'Подключаюсь к облаку TP-Link…';
+    status.textContent = 'Сохраняю данные аккаунта и подключаюсь к TP-Link…';
     resultBox.replaceChildren();
-    let persistCredentials = false;
-    let retainCredentialsForMfa = false;
+
     let credentials = null;
     let credentialsSaved = false;
+    let saveError = null;
     try {
       credentials = readTapoCredentials();
-      // Authenticate first. Config persistence is a separate step and must not block the API.
-      persistCredentials = true;
+
+      // Persist credentials before authentication so they survive MFA challenges,
+      // rejected passwords and temporary TP-Link/network errors.
+      try {
+        await saveTapoCredentials(credentials);
+        credentialsSaved = true;
+      } catch (error) {
+        saveError = error;
+      }
+
       const result = await homebridge.request('/tapo-cloud-test', {
         username: credentials.username,
         password: credentials.password,
-        mfaCode: byId('tapo-mfa').value,
-        pythonExecutable: tapoCloudPython,
-        transport: byId('tapo-transport').value
+        mfaCode: byId('tapo-mfa').value
       });
-      status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
+
+      const authenticated = result.authenticated === true || result.ok === true;
+      status.textContent = authenticated
+        ? 'Авторизация в TP-Link выполнена'
+        : 'Авторизация не пройдена';
       const alert = document.createElement('div');
-      alert.className = 'alert alert-' + (result.ok ? 'success' : 'warning');
-      alert.textContent = result.message || result.code || 'Нет результата';
+      alert.className = 'alert alert-' + (authenticated ? 'success' : 'warning');
+      alert.textContent = result.authenticated && !result.ok
+        ? 'Вход выполнен, но проверка Thing Cloud API завершилась ошибкой: ' + (result.message || result.code || 'неизвестная ошибка')
+        : (result.message || result.code || 'Нет результата');
       resultBox.append(alert);
+
       if (Array.isArray(result.diagnostics) && result.diagnostics.length) {
         const diagnosticTitle = document.createElement('h5');
         diagnosticTitle.textContent = 'Поэтапная диагностика';
@@ -355,6 +372,7 @@
         privacyNote.textContent = 'Отчёт показывает этапы, длительность, HTTP-статус, сетевой код и безопасное пояснение ошибки. Пароль, email, код MFA и токены не выводятся.';
         resultBox.append(privacyNote);
       }
+
       if (result.ok) {
         const summary = document.createElement('p');
         summary.textContent = 'Найдено устройств Tapo: ' + result.deviceCount + '. P110M: ' + result.p110mCount + '.';
@@ -414,9 +432,8 @@
           resultBox.append(note);
         }
       }
+
       if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
-        persistCredentials = false;
-        retainCredentialsForMfa = true;
         byId('tapo-mfa-wrap').hidden = false;
         if (result.code === 'mfa_required') byId('tapo-mfa').focus();
       } else {
@@ -430,21 +447,13 @@
       alert.textContent = error.message;
       resultBox.append(alert);
     } finally {
-      // Save only after the check has finished; a pending MFA challenge keeps the settings modal open.
-      if (persistCredentials && credentials) {
-        try {
-          const saved = await saveTapoCredentials(credentials);
-          credentialsSaved = saved.saved;
-          status.textContent += saved.saved
-            ? ' · данные аккаунта сохранены'
-            : ' · блок конфигурации платформы не найден — данные не сохранены';
-        } catch (saveError) {
-          status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
-        }
+      if (credentialsSaved) {
+        status.textContent += ' · логин и пароль подтверждены в config.json';
+      } else if (saveError) {
+        status.textContent += ' · не удалось подтвердить сохранение: ' + saveError.message;
       }
-      if (!retainCredentialsForMfa && credentialsSaved) {
-        byId('tapo-password').value = '';
-      }
+      // Keep the password visible in the masked field; it is also prefilled
+      // from config.json after the UI is reopened. Never clear it on success.
       byId('tapo-mfa').value = '';
       button.disabled = false;
     }
