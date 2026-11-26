@@ -90,6 +90,30 @@ function buildDailyUsageRange(region, now = Date.now(), days = 60) {
 }
 
 
+function buildQuarterStartTimestamp(region, endTimestamp) {
+  const timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(new Date(endTimestamp * 1000))
+    .filter(part => part.type !== 'literal')
+    .map(part => [part.type, Number(part.value)]));
+  const quarterMonth = Math.floor((parts.month - 1) / 3) * 3;
+  const target = Date.UTC(parts.year, quarterMonth, 1);
+  let guess = target;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const local = Object.fromEntries(formatter.formatToParts(new Date(guess))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)]));
+    const representedAsUtc = Date.UTC(local.year, local.month - 1, local.day,
+      local.hour, local.minute, local.second);
+    guess = target - (representedAsUtc - guess);
+  }
+  return Math.floor(guess / 1000);
+}
+
+
 function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
   if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
@@ -316,6 +340,48 @@ async function probeTapoThingCloud(options = {}) {
               '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
             : history.reason
         });
+
+        if (history.ok && deviceRegion) {
+          const compareStarted = Date.now();
+          const quarterStart = buildQuarterStartTimestamp(deviceRegion, usageRange.end_timestamp);
+          if (quarterStart < usageRange.end_timestamp && quarterStart !== usageRange.start_timestamp) {
+            try {
+              const quarterUsage = await api.getUsage(String(item.device.id), usageHost, {
+                start_timestamp: quarterStart,
+                end_timestamp: usageRange.end_timestamp,
+                interval: 1440
+              });
+              const primaryValues = Array.isArray(usage?.energy_data?.data) ? usage.energy_data.data : [];
+              const quarterValues = Array.isArray(quarterUsage?.energy_data?.data) ? quarterUsage.energy_data.data : [];
+              const sameCount = primaryValues.length === quarterValues.length;
+              const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === quarterValues[valueIndex]);
+              diagnostic(diagnostics, 'usage_range_compare', 'success', compareStarted, {
+                count: index + 1,
+                reason: 'Сравнение диапазонов: основной start=' + usageRange.start_timestamp +
+                  ', квартальный start=' + quarterStart + ', общий end=' + usageRange.end_timestamp +
+                  '; точек: ' + primaryValues.length + ' / ' + quarterValues.length +
+                  '; последовательности ' + (sameSequence ? 'совпадают' : 'различаются') +
+                  '; первые/последние значения: ' +
+                  (primaryValues[0] ?? '—') + '/' + (primaryValues.at(-1) ?? '—') + ' и ' +
+                  (quarterValues[0] ?? '—') + '/' + (quarterValues.at(-1) ?? '—') +
+                  '; единицы и календарная привязка не предполагаются.'
+              });
+            } catch (error) {
+              const failure = classifyThingError(error);
+              diagnostic(diagnostics, 'usage_range_compare', 'failed', compareStarted, {
+                count: index + 1,
+                errorCode: failure.errorCode,
+                httpStatus: failure.httpStatus,
+                reason: 'Не удалось выполнить дополнительный read-only запрос от начала квартала: ' + failure.reason
+              });
+            }
+          } else {
+            diagnostic(diagnostics, 'usage_range_compare', 'skipped', compareStarted, {
+              count: index + 1,
+              reason: 'Квартальная граница совпала с основным диапазоном или не попала в него.'
+            });
+          }
+        }
       } catch (error) {
         const failure = classifyThingError(error);
         readings.push({
@@ -361,4 +427,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, normalizeDailyEnergyHistory };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory };
