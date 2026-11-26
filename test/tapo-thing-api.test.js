@@ -51,16 +51,27 @@ test('Thing API exposes only read-only GET endpoints and preserves the raw usage
   });
   const things = await client.listThings();
   assert.equal(things[0].thingName, 'thing-1');
-  const usage = await client.getUsage('thing/1');
+  const usage = await client.getUsage('thing/1', 'https://us-app-server.iot.i.tplinkcloud.com');
   assert.deepEqual(usage, { opaqueVendorField: { sample: 'fixture-only' }, records: [{ value: 42 }] });
   assert.equal(calls.length, 2);
   assert.ok(calls.every(call => call.method === 'GET' && call.rejectUnauthorized === true));
   assert.ok(calls.every(call => Array.isArray(call.ca) && call.ca.length > tls.rootCertificates.length));
   assert.ok(calls.every(call => call.ca.slice(0, tls.rootCertificates.length).every((cert, index) => cert === tls.rootCertificates[index])));
   assert.ok(calls.every(call => Buffer.isBuffer(call.ca.at(-1)) && call.ca.at(-1).length > 0));
-  assert.ok(calls[0].url.includes('/v2/things?'));
-  assert.ok(calls[1].url.includes('/v1/things/thing%2F1/usage'));
+  assert.ok(calls[0].url.startsWith('https://eu-app-server.iot.i.tplinkcloud.com/v2/things?'));
+  assert.ok(calls[1].url.startsWith('https://us-app-server.iot.i.tplinkcloud.com/v1/things/thing%2F1/usage'));
   assert.equal(calls[0].headers.Authorization, 'ut|test-token');
+});
+
+test('rejects an untrusted per-device Thing API host before making a request', async () => {
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token'
+  });
+  await assert.rejects(
+    client.getUsage('thing-1', 'https://example.com'),
+    /invalid Thing API host/
+  );
 });
 
 test('requires a non-empty cloud session token', () => {
