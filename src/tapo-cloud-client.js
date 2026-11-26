@@ -381,6 +381,33 @@ async function probeTapoThingCloud(options = {}) {
           }
         }
 
+        // This is a separate rolling-period usage summary, not per-day history.
+        // Keep it independent so an unsupported response cannot discard energy_data.
+        if (typeof api.getDeviceUsage === 'function') {
+          const deviceUsageStarted = Date.now();
+          try {
+            const deviceUsage = await api.getDeviceUsage(String(item.device.id), usageHost);
+            reading.deviceUsage = deviceUsage;
+            const sections = ['time_usage', 'power_usage', 'saved_power'];
+            const safeUsage = sections
+              .filter(key => deviceUsage && deviceUsage[key] && typeof deviceUsage[key] === 'object')
+              .map(key => key + '=' + JSON.stringify(deviceUsage[key]))
+              .join('; ');
+            diagnostic(diagnostics, 'device_usage', 'success', deviceUsageStarted, {
+              count: index + 1,
+              reason: safeUsage || 'Ответ получен; известные блоки usage не найдены.'
+            });
+          } catch (error) {
+            const failure = classifyThingError(error);
+            diagnostic(diagnostics, 'device_usage', 'failed', deviceUsageStarted, {
+              count: index + 1,
+              errorCode: failure.errorCode,
+              httpStatus: failure.httpStatus,
+              reason: 'Не удалось получить отдельную сводку today/past7/past30: ' + failure.reason
+            });
+          }
+        }
+
         if (history.ok && reading.energyUsage && typeof reading.energyUsage === 'object') {
           const energySummary = reading.energyUsage;
           const latestRecord = history.records.at(-1) || null;
