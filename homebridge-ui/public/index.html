@@ -251,7 +251,7 @@
         diagnosticTable.className = 'table table-sm';
         const diagnosticHead = document.createElement('thead');
         const diagnosticHeadRow = document.createElement('tr');
-        for (const label of ['Этап', 'Результат', 'Время', 'Код']) {
+        for (const label of ['Этап', 'Результат', 'Время', 'Код', 'Причина']) {
           const th = document.createElement('th'); th.textContent = label; diagnosticHeadRow.append(th);
         }
         diagnosticHead.append(diagnosticHeadRow); diagnosticTable.append(diagnosticHead);
@@ -270,7 +270,8 @@
             stageNames[item.stage] || item.stage,
             statusNames[item.status] || item.status,
             Number.isFinite(item.durationMs) ? item.durationMs + ' мс' : '—',
-            Number.isInteger(item.code) ? String(item.code) : '—'
+            Number.isInteger(item.code) ? String(item.code) : (item.errorCode || '—'),
+            item.reason || '—'
           ]) {
             const td = document.createElement('td'); td.textContent = value; tr.append(td);
           }
