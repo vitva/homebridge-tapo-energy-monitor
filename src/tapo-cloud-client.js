@@ -281,6 +281,10 @@ async function probeTapoThingCloud(options = {}) {
       try {
         const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
         const history = normalizeDailyEnergyHistory(usage, deviceRegion || 'UTC');
+        if (history.ok) {
+          history.meta.timeZoneKnown = Boolean(deviceRegion);
+          history.meta.timeZoneSource = deviceRegion ? 'device_settings' : 'UTC_fallback';
+        }
         const reading = { id: item.device.id, usage };
         if (history.ok) reading.history = history;
         readings.push(reading);
@@ -291,7 +295,11 @@ async function probeTapoThingCloud(options = {}) {
           reason: history.ok
             ? 'Распознано точек: ' + history.meta.count + '; даты: ' +
               (history.meta.firstDate || '—') + ' — ' + (history.meta.lastDate || '—') +
-              (history.meta.rangeMismatch ? '; длина массива не совпадает с запрошенным диапазоном.' : '.')
+              '; region=' + (deviceRegion || 'не найден; использован UTC') +
+              '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
+              '; запрошено точек=' + history.meta.requestedDays +
+              '; получено=' + history.meta.returnedDays +
+              '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
             : history.reason
         });
       } catch (error) {
