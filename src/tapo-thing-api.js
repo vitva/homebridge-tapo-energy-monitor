@@ -258,6 +258,37 @@ class TapoThingApi {
     return payload.data ?? payload;
   }
 
+  async getPowerData(thingName, thingHost = this.host, range = {}) {
+    const host = validateThingHost(thingHost);
+    const startTimestamp = Number(range.start_timestamp);
+    const endTimestamp = Number(range.end_timestamp);
+    const interval = Number(range.interval);
+    const maxPoints = interval === 5 ? 144 : interval === 60 ? 144 : 0;
+    if (!Number.isSafeInteger(startTimestamp) || !Number.isSafeInteger(endTimestamp) ||
+        endTimestamp <= startTimestamp || !maxPoints ||
+        endTimestamp - startTimestamp > interval * 60 * maxPoints) {
+      throw new Error('A valid bounded Tapo power history time range is required.');
+    }
+    const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
+    const body = JSON.stringify({
+      method: 'get_power_data',
+      params: {
+        end_timestamp: endTimestamp,
+        interval,
+        start_timestamp: startTimestamp
+      }
+    });
+    const payload = await requestJson(url, {
+      request: this.request,
+      caPath: this.caPath,
+      timeoutMs: this.timeoutMs,
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      method: 'POST',
+      body
+    });
+    return payload.data ?? payload;
+  }
+
   async getEnergyUsage(thingName, thingHost = this.host) {
     const host = validateThingHost(thingHost);
     const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
