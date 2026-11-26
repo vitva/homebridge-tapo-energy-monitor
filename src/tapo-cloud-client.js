@@ -152,6 +152,14 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   const requestedDays = Number.isInteger(energyData.start_timestamp)
     ? Math.round((energyData.end_timestamp - energyData.start_timestamp) / 86400)
     : null;
+  const localTime = typeof energyData.local_time === 'string' &&
+    /^\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2})?$/.test(energyData.local_time)
+    ? energyData.local_time
+    : null;
+  const localDate = localTime ? localTime.slice(0, 10) : null;
+  const endBoundaryDate = new Date(endBoundary).toISOString().slice(0, 10);
+  const lastRecordDate = records.at(-1)?.date || null;
+  const lastRecordMatchesLocalDate = localDate ? localDate === lastRecordDate : null;
 
   return {
     ok: true,
@@ -159,13 +167,17 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
     meta: {
       count: records.length,
       firstDate: records[0]?.date || null,
-      lastDate: records.at(-1)?.date || null,
+      lastDate: lastRecordDate,
       requestedDays,
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
       valueUnit: 'unconfirmed',
       timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      localTime,
+      localDate,
+      endBoundaryDate,
+      lastRecordMatchesLocalDate,
       startTimestamp: energyData.start_timestamp ?? null,
       endTimestamp: energyData.end_timestamp,
       interval: energyData.interval,
@@ -337,6 +349,12 @@ async function probeTapoThingCloud(options = {}) {
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
               '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
+              '; local_time=' + (history.meta.localTime || '—') +
+              '; local_date=' + (history.meta.localDate || '—') +
+              '; end_date=' + history.meta.endBoundaryDate +
+              '; последняя дата совпадает с local_date=' +
+                (history.meta.lastRecordMatchesLocalDate === null ? 'нет данных' :
+                  history.meta.lastRecordMatchesLocalDate ? 'да' : 'НЕТ') +
               '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
             : history.reason
         });
