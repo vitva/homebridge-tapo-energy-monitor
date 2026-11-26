@@ -36,7 +36,7 @@ The implementation plan is therefore:
 - use the Tapo Thing Cloud `/usage` endpoint for read-only live power and history;
 - test P110M first; do not assume P110 support automatically means P110M support;
 - keep S112 and S110E readings unavailable until their cloud-relayed model-specific responses are verified;
-- store credentials/tokens server-side only; never expose them to the browser or logs;
+- store the Tapo email and password in the Homebridge platform config for reuse after restarts; the password is plain text in `config.json`, so protect that file and its backups;\n- never write credentials, MFA codes or session tokens to plugin logs or diagnostic reports; keep session tokens in memory only;
 - label every value by source (cloud device history, cloud meter counter, estimated from power, or unavailable);
 - never fill missing/offline periods with invented values or mix real and estimated values.
 
@@ -52,7 +52,7 @@ The custom Homebridge UI includes a **Проверка облака TP-Link Tapo
 - discovers devices through the Tapo Thing API and requests the read-only `/usage` resource for discovered P110M devices;
 - never sends relay, power, reboot, reset or configuration commands.
 
-The email, password and optional MFA code are submitted to the local Homebridge UI server over its plugin request channel and are not written to plugin settings or diagnostic output. The Python transport passes credentials to its helper over stdin; the experimental Node.js transport keeps them in the in-memory request flow. The cloud session token is held only for the short-lived diagnostic request and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
+The Tapo email and password are saved in the platform configuration (`config.json`) after a completed cloud check and are prefilled the next time the settings UI opens. If TP-Link requests MFA, the first attempt keeps the settings session open; the one-time MFA code is never saved. The password is stored in plain text by Homebridge, so protect `config.json`, its backups and access to the Homebridge UI. Credentials are submitted to the local Homebridge UI server over its plugin request channel and are never written to plugin logs or diagnostic reports. The Python transport passes credentials to its helper over stdin; the experimental Node.js transport keeps them in the in-memory request flow. The cloud session token is held only for the short-lived diagnostic request and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
 
 The Python reference transport requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path. The experimental Node.js transport does not require this Python environment:
 
