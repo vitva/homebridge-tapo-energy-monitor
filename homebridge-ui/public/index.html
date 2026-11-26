@@ -242,7 +242,6 @@
       ? { ...item, tapoCloudUsername: username, tapoCloudPassword: password }
       : item);
     await homebridge.updatePluginConfig(updated);
-    await homebridge.savePluginConfig();
     return { username, password };
   }
 
@@ -253,8 +252,10 @@
     button.disabled = true;
     status.textContent = 'Сохраняю данные и подключаюсь к облаку TP-Link…';
     resultBox.replaceChildren();
+    let persistCredentials = false;
     try {
       const credentials = await saveTapoCredentials();
+      persistCredentials = true;
       const result = await homebridge.request('/tapo-cloud-test', {
         username: credentials.username,
         password: credentials.password,
@@ -375,6 +376,7 @@
         }
       }
       if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
+        persistCredentials = false;
         byId('tapo-mfa-wrap').hidden = false;
         if (result.code === 'mfa_required') byId('tapo-mfa').focus();
       } else {
@@ -388,7 +390,16 @@
       alert.textContent = error.message;
       resultBox.append(alert);
     } finally {
-      // Keep the saved account password available for the next check; MFA remains one-time only.
+      // Save only after the check has finished; a pending MFA challenge keeps the settings modal open.
+      if (persistCredentials) {
+        try {
+          await homebridge.savePluginConfig();
+          status.textContent += ' · данные аккаунта сохранены';
+        } catch (saveError) {
+          status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
+        }
+      }
+      // Keep the account password available; MFA remains one-time only.
       byId('tapo-mfa').value = '';
       button.disabled = false;
     }
