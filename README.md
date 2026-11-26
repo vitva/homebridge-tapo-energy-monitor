@@ -63,7 +63,7 @@ python3 -m venv /path/to/tapo-cloud-venv
 
 For example, the configured executable would be `/path/to/tapo-cloud-venv/bin/python`. The venv and package must exist in the same container/filesystem where Homebridge runs.
 
-This is a connectivity diagnostic, not production polling. A successful login and device listing do not prove that the P110M `/usage` response contains valid current power and history. The returned structure must be checked for units, time zone, and counter semantics before wiring it into the store.
+This is a connectivity diagnostic, not production polling. A successful login and device listing do not prove that the P110M `/usage` response contains valid current power and history. The Node.js client currently returns the vendor payload without interpreting it; test fixtures are deliberately synthetic and do not describe the real TP-Link schema. The returned structure must be captured from a real account and checked for field names, units, time zone, historical bucket semantics, and counter behavior before wiring it into the store.
 
 ## Planned physical devices
 
