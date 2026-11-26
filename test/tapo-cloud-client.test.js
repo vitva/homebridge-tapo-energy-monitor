@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -452,4 +452,49 @@ test('uses the device region for exclusive end-boundary date mapping', () => {
   assert.equal(moscow.records.at(-1).date, '2026-11-26');
   assert.equal(helsinki.records[0].date, '2026-08-27');
   assert.equal(helsinki.records.at(-1).date, '2026-11-25');
+});
+
+
+test('calculates the current quarter start in the device timezone', () => {
+  const end = 1795726800; // 2026-11-27 00:00 Europe/Moscow
+  assert.equal(buildQuarterStartTimestamp('Europe/Moscow', end), 1790802000);
+  assert.equal(buildQuarterStartTimestamp('Europe/Helsinki', end), 1790805600);
+});
+
+test('performs a second read-only usage request from the quarter boundary', async () => {
+  const ranges = [];
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Europe/Moscow' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage(_id, _host, range) {
+        ranges.push({ ...range });
+        return {
+          energy_data: {
+            data: [10, 20, 30],
+            start_timestamp: range.start_timestamp,
+            end_timestamp: range.end_timestamp,
+            interval: 1440
+          }
+        };
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(ranges.length, 2);
+  assert.equal(ranges[1].start_timestamp, buildQuarterStartTimestamp('Europe/Moscow', ranges[0].end_timestamp));
+  assert.equal(ranges[1].end_timestamp, ranges[0].end_timestamp);
+  const comparison = result.diagnostics.find(item => item.stage === 'usage_range_compare');
+  assert.equal(comparison.status, 'success');
+  assert.match(comparison.reason, /последовательности совпадают/);
+  assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
