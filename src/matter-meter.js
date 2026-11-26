@@ -6,16 +6,19 @@ const METER_ID = 'tapo-energy-estimated-total';
 
 function createEstimatedMeterAccessory(api, displayName = 'Tapo Energy — Расчётная') {
   const matter = api && api.matter;
-  if (!matter || !matter.deviceTypes || !matter.deviceTypes.ElectricalSensor || !matter.uuid) {
+  // ElectricalMeter is a dedicated Matter 1.3+ device type exposed by Homebridge 2.5.0+.
+  // Do not silently downgrade to ElectricalSensor: this prototype specifically tests
+  // Apple's presentation of a meter rather than a generic electrical sensor.
+  if (!matter || !matter.deviceTypes || !matter.deviceTypes.ElectricalMeter || !matter.uuid) {
     return null;
   }
 
   return {
     UUID: matter.uuid.generate(METER_ID),
     displayName,
-    deviceType: matter.deviceTypes.ElectricalSensor,
+    deviceType: matter.deviceTypes.ElectricalMeter,
     manufacturer: 'Tapo Energy Monitor',
-    model: 'Virtual aggregate energy sensor',
+    model: 'Virtual aggregate electrical meter',
     serialNumber: 'TAPO-ENERGY-ESTIMATED',
     context: { meterId: METER_ID, measurementSource: 'estimated' },
     clusters: {
@@ -36,6 +39,7 @@ async function updateEstimatedMeter(api, uuid, summary) {
     .filter(device => device && device.active === true)
     .reduce((total, device) => total + (Number.isFinite(device.powerW) ? device.powerW : 0), 0);
   const cumulativeEnergyWh = devices
+    .filter(device => device && device.active === true)
     .reduce((total, device) => total + (Number.isFinite(device.energyWh) ? device.energyWh : 0), 0);
 
   // Matter ElectricalPowerMeasurement uses mW; ElectricalEnergyMeasurement uses mWh.

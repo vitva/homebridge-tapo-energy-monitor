@@ -1,0 +1,652 @@
+'use strict';
+
+const { TapoCloudAuth } = require('./tapo-cloud-auth');
+const { TapoThingApi, classifyThingError } = require('./tapo-thing-api');
+
+function normalizeThing(thing) {
+  const model = String(thing?.model || thing?.deviceModel || '');
+  return {
+    id: thing?.thingName || thing?.deviceId || null,
+    name: thing?.nickname || thing?.alias || model || 'Без имени',
+    model,
+    status: thing?.status ?? null,
+    category: thing?.category || thing?.deviceType || null
+  };
+}
+
+function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
+  const entry = {
+    stage,
+    status,
+    durationMs: Math.max(0, Date.now() - startedAt)
+  };
+  if (Number.isInteger(details.code)) entry.code = details.code;
+  if (Number.isInteger(details.count)) entry.count = details.count;
+  if (typeof details.errorCode === 'string') entry.errorCode = details.errorCode;
+  if (Number.isInteger(details.httpStatus)) entry.httpStatus = details.httpStatus;
+  if (typeof details.reason === 'string') entry.reason = details.reason.slice(0, 500);
+  if (typeof details.timeZone === 'string') entry.timeZone = details.timeZone;
+  diagnostics.push(entry);
+}
+
+function buildDailyUsageRange(region, now = Date.now(), days = 60) {
+  let timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    });
+    formatter.format(new Date(now));
+  } catch {
+    timeZone = 'UTC';
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    });
+  }
+
+  const partsOf = value => Object.fromEntries(
+    formatter.formatToParts(value)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  );
+  const localNow = partsOf(new Date(now));
+  const localMidnightUtc = Date.UTC(localNow.year, localNow.month - 1, localNow.day);
+  const startDate = new Date(localMidnightUtc - days * 86400000);
+  const endDate = new Date(localMidnightUtc + 86400000);
+
+  const toLocalMidnight = date => {
+    const target = date.getTime();
+    let guess = target;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const local = partsOf(new Date(guess));
+      const representedAsUtc = Date.UTC(
+        local.year, local.month - 1, local.day,
+        local.hour, local.minute, local.second
+      );
+      guess = target - (representedAsUtc - guess);
+    }
+    return Math.floor(guess / 1000);
+  };
+
+  return {
+    start_timestamp: toLocalMidnight(startDate),
+    end_timestamp: toLocalMidnight(endDate),
+    interval: 1440
+  };
+}
+
+
+function buildPowerDataRange(interval, now = Date.now()) {
+  if (interval !== 5 && interval !== 60) {
+    throw new Error('Unsupported Tapo power history interval.');
+  }
+  const intervalSeconds = interval * 60;
+  const endTimestamp = Math.floor(Math.floor(now / 1000) / intervalSeconds) * intervalSeconds;
+  const maxPoints = 144;
+  return {
+    start_timestamp: endTimestamp - intervalSeconds * maxPoints,
+    end_timestamp: endTimestamp,
+    interval
+  };
+}
+
+
+function buildQuarterStartTimestamp(region, endTimestamp) {
+  const timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(new Date(endTimestamp * 1000))
+    .filter(part => part.type !== 'literal')
+    .map(part => [part.type, Number(part.value)]));
+  const quarterMonth = Math.floor((parts.month - 1) / 3) * 3;
+  const target = Date.UTC(parts.year, quarterMonth, 1);
+  let guess = target;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const local = Object.fromEntries(formatter.formatToParts(new Date(guess))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)]));
+    const representedAsUtc = Date.UTC(local.year, local.month - 1, local.day,
+      local.hour, local.minute, local.second);
+    guess = target - (representedAsUtc - guess);
+  }
+  return Math.floor(guess / 1000);
+}
+
+
+function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
+  const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
+  if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
+      !Number.isInteger(energyData.end_timestamp) || energyData.interval !== 1440 ||
+      !energyData.data.every(value => Number.isFinite(value) && value >= 0)) {
+    return { ok: false, reason: 'Ответ не соответствует формату дневной истории energy_data.' };
+  }
+
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }
+
+  const endParts = Object.fromEntries(
+    formatter.formatToParts(new Date(energyData.end_timestamp * 1000))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  );
+  const endBoundary = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+  const records = energyData.data.map((value, index) => {
+    const day = new Date(endBoundary - (energyData.data.length - index) * 86400000);
+    return { date: day.toISOString().slice(0, 10), value };
+  });
+  const requestedDays = Number.isInteger(energyData.start_timestamp)
+    ? Math.round((energyData.end_timestamp - energyData.start_timestamp) / 86400)
+    : null;
+  const localTime = typeof energyData.local_time === 'string' &&
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/.test(energyData.local_time)
+    ? energyData.local_time
+    : null;
+  const localDate = localTime ? localTime.slice(0, 10) : null;
+  const endBoundaryDate = new Date(endBoundary).toISOString().slice(0, 10);
+  const lastRecordDate = records.at(-1)?.date || null;
+  const lastRecordMatchesLocalDate = localDate ? localDate === lastRecordDate : null;
+
+  return {
+    ok: true,
+    records,
+    meta: {
+      count: records.length,
+      firstDate: records[0]?.date || null,
+      lastDate: lastRecordDate,
+      requestedDays,
+      returnedDays: records.length,
+      rangeMismatch: requestedDays !== null && requestedDays !== records.length,
+      dateBasis: 'end_timestamp',
+      valueUnit: 'Wh',
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      localTime,
+      localDate,
+      endBoundaryDate,
+      lastRecordMatchesLocalDate,
+      startTimestamp: energyData.start_timestamp ?? null,
+      endTimestamp: energyData.end_timestamp,
+      interval: energyData.interval,
+      alignmentVerified: false
+    }
+  };
+}
+
+function summarizeCloudResource(kind, payload) {
+  if (!payload || typeof payload !== 'object') return 'Ответ получен; структура не распознана.';
+  if (kind === 'shadows' || kind === 'matter_shadows') {
+    const shadows = Array.isArray(payload.shadows) ? payload.shadows : [];
+    const reported = shadows[0]?.state?.reported;
+    const fields = reported && typeof reported === 'object' ? Object.keys(reported).slice(0, 30) : [];
+    return fields.length ? 'Поля reported: ' + fields.join(', ') : 'Ответ получен; reported-состояние не найдено.';
+  }
+  if (kind === 'model') {
+    const services = new Set();
+    const properties = new Set();
+    const visit = (value, parent = '', depth = 0) => {
+      if (depth > 12 || value === null || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        for (const item of value.slice(0, 500)) visit(item, parent, depth + 1);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (typeof child === 'string' && /^(serviceId|service_id)$/i.test(key)) services.add(child);
+        if (typeof child === 'string' && /^(propertyId|property_id|propertyName)$/i.test(key)) properties.add(child);
+        if (typeof child === 'string' && key === 'name' && /service/i.test(parent)) services.add(child);
+        if (typeof child === 'string' && key === 'name' && /propert/i.test(parent)) properties.add(child);
+        if (child && typeof child === 'object') visit(child, key, depth + 1);
+      }
+    };
+    visit(payload);
+    return 'Сервисы: ' + (Array.from(services).slice(0, 30).join(', ') || 'не найдены') +
+      '; свойства: ' + (Array.from(properties).slice(0, 30).join(', ') || 'не найдены');
+  }
+  return 'Поля ответа: ' + Object.keys(payload).slice(0, 30).join(', ');
+}
+
+async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) {
+  let deviceRegion = null;
+  const checks = [
+    ['cloud_details', () => api.getThingResource(String(item.device.id), 'details', host), 'details'],
+    ['cloud_rt_info', () => api.getThingResource(String(item.device.id), 'rt-info', host), 'rt-info'],
+    ['cloud_settings', () => api.getThingResource(String(item.device.id), 'settings', host), 'settings'],
+    ['cloud_shadows', () => api.getShadows(String(item.device.id), host, false), 'shadows'],
+    ['cloud_matter_shadows', () => api.getShadows(String(item.device.id), host, true), 'matter_shadows']
+  ];
+  if (item.thing.thingModelId && typeof api.getModel === 'function') {
+    checks.push(['cloud_model', () => api.getModel(String(item.thing.thingModelId), host), 'model']);
+  }
+  for (const [stage, request, kind] of checks) {
+    if (typeof request !== 'function') continue;
+    const started = Date.now();
+    try {
+      const payload = await request();
+      const reportedRegion = kind === 'settings' && typeof payload?.region === 'string'
+        ? payload.region.trim().slice(0, 100)
+        : '';
+      if (reportedRegion) {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: reportedRegion }).format(0);
+          deviceRegion = reportedRegion;
+        } catch {
+          deviceRegion = null;
+        }
+      }
+      diagnostic(diagnostics, stage, 'success', started, {
+        count: index + 1,
+        reason: kind === 'settings'
+          ? summarizeCloudResource(kind, payload) + (deviceRegion
+            ? '; region=' + deviceRegion
+            : reportedRegion
+              ? '; region=' + reportedRegion + ' (невалидный часовой пояс; UTC fallback)'
+              : '; region не найден')
+          : summarizeCloudResource(kind, payload)
+      });
+    } catch (error) {
+      const failure = classifyThingError(error);
+      diagnostic(diagnostics, stage, 'failed', started, {
+        count: index + 1,
+        errorCode: failure.errorCode,
+        httpStatus: failure.httpStatus,
+        reason: failure.reason
+      });
+    }
+  }
+  return deviceRegion;
+}
+
+async function probeTapoThingCloud(options = {}) {
+  const diagnostics = [];
+  const username = typeof options.username === 'string' ? options.username.trim() : '';
+  const password = typeof options.password === 'string' ? options.password : '';
+  const mfaCode = typeof options.mfaCode === 'string' ? options.mfaCode.trim() : '';
+  if (!username || !password) {
+    return {
+      ok: false,
+      code: 'credentials_required',
+      message: 'Укажите email и пароль аккаунта Tapo.',
+      diagnostics
+    };
+  }
+
+  const auth = options.auth || new TapoCloudAuth({
+    ...options.authOptions,
+    onDiagnostic: event => diagnostics.push(event)
+  });
+  const authStarted = Date.now();
+  const beforeAuthDiagnostics = diagnostics.length;
+  const login = await auth.login({ username, password, mfaCode });
+  if (diagnostics.length === beforeAuthDiagnostics) {
+    diagnostic(diagnostics, 'authentication', login.ok ? 'success' :
+      (login.code === 'mfa_required' ? 'required' : 'failed'), authStarted);
+  }
+  if (!login.ok) return { ...login, diagnostics };
+
+  let stage = 'thing_service';
+  let stageStarted = Date.now();
+  try {
+    const host = await auth.discoverThingService(username, login.token);
+    diagnostic(diagnostics, stage, 'success', stageStarted);
+
+    stage = 'device_list';
+    stageStarted = Date.now();
+    const api = (options.apiFactory || (args => new TapoThingApi(args)))({
+      host,
+      token: login.token,
+      termId: login.termId
+    });
+    const things = await api.listThings();
+    const devices = things.map(normalizeThing);
+    diagnostic(diagnostics, 'device_list', 'success', stageStarted, { count: devices.length });
+
+    const candidates = things
+      .map((thing, index) => ({ thing, device: devices[index] }))
+      .filter(item => /P110M/i.test(item.device.model) && item.device.id);
+
+    const readings = [];
+    if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
+    for (let index = 0; index < candidates.length; index += 1) {
+      const item = candidates[index];
+      const usageHost = item.thing.appServerUrlV2 || item.thing.appServerUrl || host;
+      let deviceRegion = null;
+      if (typeof api.getThingResource === 'function' && typeof api.getShadows === 'function') {
+        deviceRegion = await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
+      }
+      const usageRange = buildDailyUsageRange(deviceRegion);
+      const usageStarted = Date.now();
+      try {
+        const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
+        const history = normalizeDailyEnergyHistory(usage, deviceRegion || 'UTC');
+        if (history.ok) {
+          history.meta.timeZoneKnown = Boolean(deviceRegion);
+          history.meta.timeZoneSource = deviceRegion ? 'device_settings' : 'UTC_fallback';
+        }
+        const reading = { id: item.device.id, usage };
+        if (history.ok) reading.history = history;
+        diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
+
+        // Tapo exposes runtime and today's/month's counters separately from daily energy history.
+        // Keep this request independent: a missing summary must not discard valid energy_data.
+        if (typeof api.getEnergyUsage === 'function') {
+          const summaryStarted = Date.now();
+          try {
+            const energyUsage = await api.getEnergyUsage(String(item.device.id), usageHost);
+            reading.energyUsage = energyUsage;
+            const fields = ['today_energy', 'month_energy', 'today_runtime', 'month_runtime',
+              'current_power', 'local_time'];
+            const unitByField = {
+              today_energy: ' Wh',
+              month_energy: ' Wh',
+              today_runtime: ' min',
+              month_runtime: ' min',
+              current_power: ' mW'
+            };
+            const safeSummary = fields
+              .filter(key => energyUsage && energyUsage[key] !== undefined)
+              .map(key => {
+                const raw = energyUsage[key];
+                const unit = unitByField[key] || '';
+                if (key === 'current_power' && Number.isFinite(Number(raw))) {
+                  return key + '=' + String(raw) + ' mW (' + (Number(raw) / 1000).toFixed(3) + ' W)';
+                }
+                return key + '=' + String(raw) + unit;
+              })
+              .join('; ');
+            diagnostic(diagnostics, 'energy_usage', 'success', summaryStarted, {
+              count: index + 1,
+              reason: safeSummary || 'Ответ получен; известные поля сводки не найдены.'
+            });
+          } catch (error) {
+            const failure = classifyThingError(error);
+            diagnostic(diagnostics, 'energy_usage', 'failed', summaryStarted, {
+              count: index + 1,
+              errorCode: failure.errorCode,
+              httpStatus: failure.httpStatus,
+              reason: 'Не удалось получить отдельную сводку today/month energy и runtime: ' + failure.reason
+            });
+          }
+        }
+
+        // This is a separate rolling-period usage summary, not per-day history.
+        // Keep it independent so an unsupported response cannot discard energy_data.
+        if (typeof api.getDeviceUsage === 'function') {
+          const deviceUsageStarted = Date.now();
+          try {
+            const deviceUsage = await api.getDeviceUsage(String(item.device.id), usageHost);
+            reading.deviceUsage = deviceUsage;
+            const sections = ['time_usage', 'power_usage', 'saved_power'];
+            const safeUsage = sections
+              .filter(key => deviceUsage && deviceUsage[key] && typeof deviceUsage[key] === 'object')
+              .map(key => key + '=' + JSON.stringify(deviceUsage[key]))
+              .join('; ');
+            diagnostic(diagnostics, 'device_usage', 'success', deviceUsageStarted, {
+              count: index + 1,
+              reason: safeUsage || 'Ответ получен; известные блоки usage не найдены.'
+            });
+          } catch (error) {
+            const failure = classifyThingError(error);
+            diagnostic(diagnostics, 'device_usage', 'failed', deviceUsageStarted, {
+              count: index + 1,
+              errorCode: failure.errorCode,
+              httpStatus: failure.httpStatus,
+              reason: 'Не удалось получить отдельную сводку today/past7/past30: ' + failure.reason
+            });
+          }
+        }
+
+        // Power samples are raw historical measurements (W), not runtime minutes.
+        // Request both documented granularities, each bounded to the 144-point API limit.
+        if (typeof api.getPowerData === 'function') {
+          for (const interval of [5, 60]) {
+            const powerRange = buildPowerDataRange(interval);
+            const powerStarted = Date.now();
+            try {
+              const powerData = await api.getPowerData(String(item.device.id), usageHost, powerRange);
+              const key = interval === 5 ? 'powerData5m' : 'powerDataHourly';
+              reading[key] = powerData;
+              const values = Array.isArray(powerData?.data) ? powerData.data : [];
+              const missing = values.filter(value => value === null || value === -1).length;
+              const valid = values.filter(value => Number.isFinite(value) && value >= 0);
+              const safePower = 'интервал=' + interval + ' мин; точек=' + values.length +
+                '; значений мощности=' + valid.length + '; нет данных=' + missing +
+                '; начало=' + (powerData.start_timestamp ?? '—') +
+                '; конец=' + (powerData.end_timestamp ?? '—') +
+                '; единицы ответа: W';
+              diagnostic(diagnostics, interval === 5 ? 'power_data_5m' : 'power_data_hourly',
+                'success', powerStarted, { count: index + 1, reason: safePower });
+            } catch (error) {
+              const failure = classifyThingError(error);
+              diagnostic(diagnostics, interval === 5 ? 'power_data_5m' : 'power_data_hourly',
+                'failed', powerStarted, {
+                  count: index + 1,
+                  errorCode: failure.errorCode,
+                  httpStatus: failure.httpStatus,
+                  reason: 'Не удалось получить историю мощности (' + interval + ' мин): ' + failure.reason
+                });
+            }
+          }
+        }
+
+        if (history.ok && reading.energyUsage && typeof reading.energyUsage === 'object') {
+          const energySummary = reading.energyUsage;
+          const latestRecord = history.records.at(-1) || null;
+          const todayEnergy = Number(energySummary.today_energy);
+          const todayComparable = energySummary.today_energy !== null &&
+            energySummary.today_energy !== undefined && Number.isFinite(todayEnergy) &&
+            latestRecord && history.meta.localDate === latestRecord.date;
+          const todayCheck = todayComparable
+            ? 'today_energy=' + todayEnergy + ' Wh; последняя дневная запись=' +
+              latestRecord.value + ' Wh; разница=' + (latestRecord.value - todayEnergy) + ' Wh'
+            : 'today_energy не сопоставлен: дата последней записи=' +
+              (latestRecord?.date || '—') + '; local_date=' + (history.meta.localDate || '—');
+
+          const localTime = typeof energySummary.local_time === 'string'
+            ? energySummary.local_time
+            : '';
+          const localDate = /^\d{4}-\d{2}-\d{2}/.test(localTime)
+            ? localTime.slice(0, 10)
+            : '';
+          const monthPrefix = localDate ? localDate.slice(0, 7) : '';
+          const monthRecords = monthPrefix
+            ? history.records.filter(record => record.date.startsWith(monthPrefix))
+            : [];
+          const monthSum = monthRecords.reduce((sum, record) => sum + record.value, 0);
+          const localDay = localDate ? Number(localDate.slice(8, 10)) : 0;
+          const monthComplete = localDay > 0 && monthRecords.length === localDay &&
+            monthRecords.every((record, recordIndex) =>
+              record.date === monthPrefix + '-' + String(recordIndex + 1).padStart(2, '0'));
+          const monthCheck = energySummary.month_energy !== null &&
+            energySummary.month_energy !== undefined &&
+            Number.isFinite(Number(energySummary.month_energy)) && monthComplete
+            ? 'month_energy=' + Number(energySummary.month_energy) + ' Wh; сумма дневных записей=' +
+              monthSum + ' Wh; разница=' + (monthSum - Number(energySummary.month_energy)) + ' Wh'
+            : 'month_energy не сопоставлен: получено записей за месяц=' + monthRecords.length +
+              '; первая дата=' + (monthRecords[0]?.date || '—');
+
+          diagnostic(diagnostics, 'usage_crosscheck', 'success', Date.now(), {
+            count: index + 1,
+            reason: todayCheck + '; ' + monthCheck +
+              '; runtime остаётся отдельной величиной в минутах и не участвует в суммах Wh.'
+          });
+        }
+
+        readings.push(reading);
+        const formatStarted = Date.now();
+        diagnostic(diagnostics, 'usage_format', history.ok ? 'success' : 'failed', formatStarted, {
+          count: index + 1,
+          reason: history.ok
+            ? 'Распознано точек: ' + history.meta.count + '; даты: ' +
+              (history.meta.firstDate || '—') + ' — ' + (history.meta.lastDate || '—') +
+              '; region=' + (deviceRegion || 'не найден; использован UTC') +
+              '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
+              '; единицы=' + history.meta.valueUnit +
+              '; запрошено точек=' + history.meta.requestedDays +
+              '; получено=' + history.meta.returnedDays +
+              '; local_time=' + (history.meta.localTime || '—') +
+              '; local_date=' + (history.meta.localDate || '—') +
+              '; end_date=' + history.meta.endBoundaryDate +
+              '; последняя дата совпадает с local_date=' +
+                (history.meta.lastRecordMatchesLocalDate === null ? 'нет данных' :
+                  history.meta.lastRecordMatchesLocalDate ? 'да' : 'НЕТ') +
+              '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
+            : history.reason
+        });
+
+        if (history.ok && deviceRegion) {
+          const compareStarted = Date.now();
+          const quarterStart = buildQuarterStartTimestamp(deviceRegion, usageRange.end_timestamp);
+          if (quarterStart < usageRange.end_timestamp && quarterStart !== usageRange.start_timestamp) {
+            try {
+              const quarterUsage = await api.getUsage(String(item.device.id), usageHost, {
+                start_timestamp: quarterStart,
+                end_timestamp: usageRange.end_timestamp,
+                interval: 1440
+              });
+              const primaryEnergy = usage?.energy_data && typeof usage.energy_data === 'object'
+                ? usage.energy_data : {};
+              const quarterEnergy = quarterUsage?.energy_data && typeof quarterUsage.energy_data === 'object'
+                ? quarterUsage.energy_data : {};
+              const primaryValues = Array.isArray(primaryEnergy.data) ? primaryEnergy.data : [];
+              const quarterValues = Array.isArray(quarterEnergy.data) ? quarterEnergy.data : [];
+              const sameCount = primaryValues.length === quarterValues.length;
+              const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === quarterValues[valueIndex]);
+              let bestOffset = 0;
+              let bestNonZeroMatches = -1;
+              let bestNonZeroCompared = 0;
+              for (let offset = -7; offset <= 7; offset += 1) {
+                let matches = 0;
+                let compared = 0;
+                for (let primaryIndex = 0; primaryIndex < primaryValues.length; primaryIndex += 1) {
+                  const quarterIndex = primaryIndex + offset;
+                  if (quarterIndex < 0 || quarterIndex >= quarterValues.length) continue;
+                  const left = primaryValues[primaryIndex];
+                  const right = quarterValues[quarterIndex];
+                  if (left !== 0 || right !== 0) {
+                    compared += 1;
+                    if (left === right) matches += 1;
+                  }
+                }
+                if (matches > bestNonZeroMatches ||
+                    (matches === bestNonZeroMatches && Math.abs(offset) < Math.abs(bestOffset))) {
+                  bestOffset = offset;
+                  bestNonZeroMatches = matches;
+                  bestNonZeroCompared = compared;
+                }
+              }
+              const sample = values => ({
+                first: values.slice(0, 5),
+                last: values.slice(-5)
+              });
+              const primarySample = sample(primaryValues);
+              const quarterSample = sample(quarterValues);
+              const returnedMeta = value => [
+                Number.isInteger(value.start_timestamp) ? value.start_timestamp : '—',
+                Number.isInteger(value.end_timestamp) ? value.end_timestamp : '—',
+                typeof value.local_time === 'string' ? value.local_time.slice(0, 19) : '—'
+              ];
+              const primaryMeta = returnedMeta(primaryEnergy);
+              const quarterMeta = returnedMeta(quarterEnergy);
+              diagnostic(diagnostics, 'usage_range_compare', 'success', compareStarted, {
+                count: index + 1,
+                reason: 'Диапазоны: start/end/local основной=' + primaryMeta.join('/') +
+                  ', квартальный=' + quarterMeta.join('/') +
+                  '; запрошено start=' + usageRange.start_timestamp + '/' + quarterStart +
+                  ', end=' + usageRange.end_timestamp +
+                  '; точек=' + primaryValues.length + '/' + quarterValues.length +
+                  '; совпадение=' + (sameSequence ? 'полное' : 'нет') +
+                  '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
+                  Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
+                  '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(quarterSample) +
+                  '; значения energy_data трактуются как Wh по контракту Tapo get_energy_data.'
+              });
+            } catch (error) {
+              const failure = classifyThingError(error);
+              diagnostic(diagnostics, 'usage_range_compare', 'failed', compareStarted, {
+                count: index + 1,
+                errorCode: failure.errorCode,
+                httpStatus: failure.httpStatus,
+                reason: 'Не удалось выполнить дополнительный read-only запрос от начала квартала: ' + failure.reason
+              });
+            }
+          } else {
+            diagnostic(diagnostics, 'usage_range_compare', 'skipped', compareStarted, {
+              count: index + 1,
+              reason: 'Квартальная граница совпала с основным диапазоном или не попала в него.'
+            });
+          }
+        }
+      } catch (error) {
+        const failure = classifyThingError(error);
+        readings.push({
+          id: item.device.id,
+          error: 'Не удалось прочитать энергопоказания из Thing Cloud API.',
+          errorCode: failure.errorCode,
+          httpStatus: failure.httpStatus,
+          reason: failure.reason
+        });
+        diagnostic(diagnostics, 'usage', 'failed', usageStarted, {
+          code: Number.isInteger(error?.code) ? error.code : undefined,
+          errorCode: failure.errorCode,
+          httpStatus: failure.httpStatus,
+          reason: failure.reason,
+          count: index + 1
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      cloud: 'tapo-thing-api',
+      authenticated: true,
+      deviceCount: devices.length,
+      devices,
+      p110mCount: candidates.length,
+      readings,
+      diagnostics,
+      message: 'Авторизация и обнаружение устройств через Tapo Thing Cloud API выполнены. Отправлялись только запросы чтения.'
+    };
+  } catch (error) {
+    diagnostic(diagnostics, stage, 'failed', stageStarted, {
+      code: Number.isInteger(error?.code) ? error.code : undefined
+    });
+    return {
+      ok: false,
+      code: 'thing_api_error',
+      authenticated: true,
+      message: 'Вход в аккаунт выполнен, но получить данные Thing Cloud API не удалось.',
+      detail: 'Проверьте этап диагностики выше и повторите проверку.',
+      diagnostics
+    };
+  }
+}
+
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildPowerDataRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory };

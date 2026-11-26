@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm_promote:
-        description: Move latest to the already-published 0.2.0-beta.1
+        description: Move latest to the already-published 0.2.0-beta.2
         required: true
         type: boolean
         default: false
@@ -30,7 +30,7 @@ jobs:
             exit 1
           fi
       - name: Promote published beta to latest
-        run: npm dist-tag add homebridge-tapo-energy-monitor@0.2.0-beta.1 latest
+        run: npm dist-tag add homebridge-tapo-energy-monitor@0.2.0-beta.2 latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Verify npm dist-tags

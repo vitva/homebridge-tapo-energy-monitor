@@ -2,6 +2,7 @@
 """Read-only TP-Link Tapo Thing Cloud diagnostic (no LAN fallback)."""
 import json
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
@@ -39,12 +40,23 @@ def api_error(payload):
     except (TypeError, ValueError):
         code = -1
     if code:
-        message = payload.get("msg") or payload.get("errorMsg") or "Cloud API error"
-        return "TP-Link Thing API error " + str(code) + ": " + str(message)[:180]
+        return "TP-Link Thing API error " + str(code)
     return None
 
 
+def add_diagnostic(items, stage, status, started, **details):
+    entry = {"stage": stage, "status": status, "durationMs": max(0, int((time.monotonic() - started) * 1000))}
+    if isinstance(details.get("code"), int):
+        entry["code"] = details["code"]
+    if isinstance(details.get("count"), int):
+        entry["count"] = details["count"]
+    items.append(entry)
+
+
 def main():
+    diagnostics = []
+    active_stage = "authentication"
+    stage_started = time.monotonic()
     try:
         data = json.load(sys.stdin)
         username = data.get("username")
@@ -66,14 +78,19 @@ def main():
     try:
         api = TPLinkApi(cloud_type="tapo")
         callback = (lambda _kind, _email: mfa_code) if mfa_code else None
+        stage_started = time.monotonic()
         auth = api.login(username.strip(), password, mfa_callback=callback)
         token = auth.get("token") if isinstance(auth, dict) else None
         if not token:
-            emit({"ok": False, "code": "login_failed", "message": "TP-Link не вернул токен облачной сессии."})
+            add_diagnostic(diagnostics, "authentication", "failed", stage_started)
+            emit({"ok": False, "code": "login_failed", "message": "TP-Link не вернул токен облачной сессии.", "diagnostics": diagnostics})
             return
+        add_diagnostic(diagnostics, "authentication", "success", stage_started)
 
         # The Thing API uses a newer Tapo app identity than the account login API.
         api._query_params.update({"appName": THING_APP, "appVer": THING_VERSION})
+        active_stage = "thing_service"
+        stage_started = time.monotonic()
         service_response = api._request_post_v2(
             api.host,
             "/api/v2/common/getAppServiceUrlByCloudUserName",
@@ -81,7 +98,8 @@ def main():
             token,
         )
         if not service_response.successful:
-            emit({"ok": False, "code": "thing_service_discovery_failed", "message": "Вход выполнен, но TP-Link не выдал адрес Thing Cloud API."})
+            add_diagnostic(diagnostics, active_stage, "failed", stage_started)
+            emit({"ok": False, "code": "thing_service_discovery_failed", "message": "Вход выполнен, но TP-Link не выдал адрес Thing Cloud API.", "diagnostics": diagnostics})
             return
 
         app_server = ""
@@ -91,6 +109,7 @@ def main():
                 app_server = service.get("serviceUrl") or ""
                 break
         host = valid_thing_host(app_server)
+        add_diagnostic(diagnostics, active_stage, "success", stage_started)
 
         session = requests.Session()
         session.verify = str(Path(__file__).with_name("tplink-cloud-server-ca.pem"))
@@ -110,6 +129,8 @@ def main():
             "User-Agent": THING_APP + "/" + THING_VERSION + "(Homebridge/;Android 15)",
         })
 
+        active_stage = "device_list"
+        stage_started = time.monotonic()
         things = []
         for page in range(100):
             params = {
@@ -147,8 +168,11 @@ def main():
             if "P110M" in model.upper() and item["id"]:
                 p110m.append((thing, item))
 
+        add_diagnostic(diagnostics, active_stage, "success", stage_started, count=len(devices))
+        active_stage = "usage"
         readings = []
-        for thing, item in p110m:
+        for usage_index, (thing, item) in enumerate(p110m, start=1):
+            usage_started = time.monotonic()
             try:
                 thing_id = quote(str(item["id"]), safe="")
                 response = session.get(host + "/v1/things/" + thing_id + "/usage",
@@ -157,29 +181,39 @@ def main():
                 usage_response = response.json()
                 problem = api_error(usage_response)
                 if problem:
-                    readings.append({"id": item["id"], "error": problem})
+                    readings.append({"id": item["id"], "error": "TP-Link Thing API отклонил запрос показаний."})
+                    add_diagnostic(diagnostics, "usage", "failed", usage_started, count=usage_index)
                     continue
                 usage = usage_response.get("data", usage_response)
                 readings.append({"id": item["id"], "usage": usage})
+                add_diagnostic(diagnostics, "usage", "success", usage_started, count=usage_index)
             except requests.Timeout:
                 readings.append({"id": item["id"], "error": "Облачный запрос показаний превысил лимит времени."})
+                add_diagnostic(diagnostics, "usage", "failed", usage_started, count=usage_index)
             except Exception:
                 readings.append({"id": item["id"], "error": "Не удалось прочитать энергопоказания из Thing Cloud API."})
+                add_diagnostic(diagnostics, "usage", "failed", usage_started, count=usage_index)
+        if not p110m:
+            add_diagnostic(diagnostics, "usage", "skipped", time.monotonic())
 
         emit({
             "ok": True, "cloud": "tapo-thing-api", "authenticated": True,
             "deviceCount": len(devices), "devices": devices,
-            "p110mCount": len(p110m), "readings": readings,
+            "p110mCount": len(p110m), "readings": readings, "diagnostics": diagnostics,
             "message": "Авторизация и обнаружение устройств через Tapo Thing Cloud API выполнены. Запрошены только данные чтения; команды управления не отправлялись."
         })
     except TPLinkMFARequiredError:
-        emit({"ok": False, "code": "mfa_required", "message": "TP-Link запросил код подтверждения. Введите свежий код из письма и повторите проверку."})
+        add_diagnostic(diagnostics, "authentication", "required", stage_started)
+        emit({"ok": False, "code": "mfa_required", "message": "TP-Link запросил код подтверждения. Введите свежий код из письма и повторите проверку.", "diagnostics": diagnostics})
     except TPLinkAuthError:
-        emit({"ok": False, "code": "auth_failed", "message": "TP-Link отклонил логин или пароль. Проверьте данные аккаунта."})
+        add_diagnostic(diagnostics, "authentication", "failed", stage_started)
+        emit({"ok": False, "code": "auth_failed", "message": "TP-Link отклонил логин или пароль. Проверьте данные аккаунта.", "diagnostics": diagnostics})
     except TPLinkCloudError:
-        emit({"ok": False, "code": "cloud_error", "message": "Ошибка авторизации или обращения к облаку TP-Link."})
+        add_diagnostic(diagnostics, active_stage, "failed", stage_started)
+        emit({"ok": False, "code": "cloud_error", "message": "Ошибка авторизации или обращения к облаку TP-Link.", "diagnostics": diagnostics})
     except Exception:
-        emit({"ok": False, "code": "thing_api_error", "message": "Не удалось получить список устройств или данные Thing Cloud API. Подробности скрыты."})
+        add_diagnostic(diagnostics, active_stage, "failed", stage_started)
+        emit({"ok": False, "code": "thing_api_error", "message": "Не удалось получить список устройств или данные Thing Cloud API. Подробности скрыты.", "diagnostics": diagnostics})
 
 
 if __name__ == "__main__":

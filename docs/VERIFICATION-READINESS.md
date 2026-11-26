@@ -22,15 +22,15 @@ Request process: https://github.com/homebridge/plugins
 | Homebridge Plugin Settings GUI | Pass | Ships `config.schema.json`, custom UI entry point and UI server. |
 | No analytics or tracking | Pass by inspection | No analytics integration is present. |
 | Persistent files inside Homebridge storage | Pass | Energy history uses `api.user.storagePath()`; external data-directory override removed. |
-| Errors caught and logged | Partial | Main sampling, Matter registration and cloud helper failures are caught. Continue adding failure-path tests, especially UI server startup and cloud auth/MFA. |
+| Errors caught and logged | Partial | Main sampling, Matter registration and cloud diagnostic failures are caught. Safe stage diagnostics and mocked auth/MFA tests exist; live rate-limit, cloud outage, UI server startup and restart/shutdown paths remain to be tested. |
 
 ## Blocking work before requesting verification
 
-1. Implement production Tapo cloud polling without requiring users to install Python separately.
+1. Integrate the experimental Node.js Tapo cloud transport into production polling so users do not need to install Python separately; keep Python as a reference diagnostic until parity is proven.
 2. Validate P110M response fields, units, timezone, historical bucket semantics and offline behavior against a real account.
 3. Implement S112 and S110E only after their cloud data contracts are verified; clearly report unsupported models.
 4. Connect verified cloud readings to the aggregator while keeping measured and estimated totals separate.
-5. Add integration tests for login failures, MFA, rate limits, cloud outages, malformed responses and graceful restart/shutdown.
+5. Add integration tests for login failures, optional MFA challenges and invalid codes, rate limits, cloud outages, malformed responses and graceful restart/shutdown. Current tests are mocked and do not constitute a live TP-Link account check.
 6. Confirm the plugin offers distinct functionality from existing verified energy-monitoring plugins.
 7. Publish an approved npm version, create its matching GitHub release and release notes, then open the verification request issue in homebridge/plugins.
 
