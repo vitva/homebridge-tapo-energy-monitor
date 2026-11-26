@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const tls = require('node:tls');
 const { TapoThingApi, validateThingHost, cloudApiError } = require('../src/tapo-thing-api');
 
 test('validates only HTTPS TP-Link Thing API hosts', () => {
@@ -25,7 +26,7 @@ test('rejects malformed and non-zero API error payloads', () => {
 test('Thing API exposes only read-only GET endpoints and preserves the raw usage payload', async () => {
   const calls = [];
   const fakeRequest = (url, options, callback) => {
-    calls.push({ url: String(url), method: options.method, headers: options.headers });
+    calls.push({ url: String(url), method: options.method, headers: options.headers, ca: options.ca, rejectUnauthorized: options.rejectUnauthorized });
     const { EventEmitter } = require('node:events');
     const { PassThrough } = require('node:stream');
     const req = new EventEmitter();
@@ -53,7 +54,10 @@ test('Thing API exposes only read-only GET endpoints and preserves the raw usage
   const usage = await client.getUsage('thing/1');
   assert.deepEqual(usage, { opaqueVendorField: { sample: 'fixture-only' }, records: [{ value: 42 }] });
   assert.equal(calls.length, 2);
-  assert.ok(calls.every(call => call.method === 'GET'));
+  assert.ok(calls.every(call => call.method === 'GET' && call.rejectUnauthorized === true));
+  assert.ok(calls.every(call => Array.isArray(call.ca) && call.ca.length > tls.rootCertificates.length));
+  assert.ok(calls.every(call => call.ca.slice(0, tls.rootCertificates.length).every((cert, index) => cert === tls.rootCertificates[index])));
+  assert.ok(calls.every(call => Buffer.isBuffer(call.ca.at(-1)) && call.ca.at(-1).length > 0));
   assert.ok(calls[0].url.includes('/v2/things?'));
   assert.ok(calls[1].url.includes('/v1/things/thing%2F1/usage'));
   assert.equal(calls[0].headers.Authorization, 'ut|test-token');
