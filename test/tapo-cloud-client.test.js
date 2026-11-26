@@ -32,13 +32,14 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
       async listThings() {
         calls.push(['list']);
         return [
-          { thingName: 'p110m-1', nickname: 'Socket', model: 'P110M', status: 'online' },
+          { thingName: 'p110m-1', nickname: 'Socket', model: 'P110M',
+            appServerUrlV2: 'https://us-app-server.iot.i.tplinkcloud.com' },
           { thingName: 's112-1', model: 'S112' },
           { thingName: 'p110-1', model: 'P110' }
         ];
       },
-      async getUsage(id) {
-        calls.push(['usage', id]);
+      async getUsage(id, host) {
+        calls.push(['usage', id, host]);
         return { today: 1.25, history: [] };
       }
     };
@@ -64,7 +65,28 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
   assert.deepEqual(calls.map(call => call[0]), ['login', 'discover', 'api', 'list', 'usage']);
   assert.equal(calls[1][2], 'session-secret');
   assert.equal(calls[2][1].token, 'session-secret');
+  assert.deepEqual(calls[4], [
+    'usage', 'p110m-1', 'https://us-app-server.iot.i.tplinkcloud.com'
+  ]);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
+});
+
+test('falls back to the discovered Thing host when a device has no appServerUrlV2', async () => {
+  let usageHost;
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getUsage(_id, host) { usageHost = host; return { today: 1 }; }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(usageHost, 'https://eu-app-server.iot.i.tplinkcloud.com');
 });
 
 test('returns MFA challenge without attempting Thing API calls', async () => {
