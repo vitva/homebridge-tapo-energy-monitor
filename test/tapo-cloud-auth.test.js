@@ -209,3 +209,72 @@ test('rejects an invalid MFA code without exposing credentials in diagnostics', 
   assert.equal(Object.hasOwn(auth, 'password'), false);
   assert.equal(Object.hasOwn(auth, 'username'), false);
 });
+
+
+test('reports safe DNS transport diagnostics without exposing raw network errors', async () => {
+  const diagnostics = [];
+  const request = () => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const error = new Error('getaddrinfo ENOTFOUND private-internal-host.example');
+      error.code = 'ENOTFOUND';
+      req.emit('error', error);
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({
+    request,
+    onDiagnostic: event => diagnostics.push(event),
+    termId: 'test-terminal'
+  });
+  const result = await auth.login({ username: 'private@example.com', password: 'local-secret' });
+  assert.equal(result.ok, false);
+  assert.equal(diagnostics[0].stage, 'regional_server');
+  assert.equal(diagnostics[0].status, 'failed');
+  assert.equal(diagnostics[0].errorCode, 'ENOTFOUND');
+  assert.match(diagnostics[0].reason, /DNS/);
+  const serialized = JSON.stringify({ result, diagnostics });
+  assert.equal(serialized.includes('private-internal-host.example'), false);
+  assert.equal(serialized.includes('local-secret'), false);
+  assert.equal(serialized.includes('private@example.com'), false);
+});
+
+test('reports TLS transport failures with a safe explanation', async () => {
+  const diagnostics = [];
+  const request = () => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const error = new Error('certificate details must not be shown');
+      error.code = 'CERT_HAS_EXPIRED';
+      req.emit('error', error);
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, onDiagnostic: event => diagnostics.push(event) });
+  await auth.login({ username: 'private@example.com', password: 'local-secret' });
+  assert.equal(diagnostics[0].errorCode, 'CERT_HAS_EXPIRED');
+  assert.match(diagnostics[0].reason, /TLS/);
+  assert.equal(JSON.stringify(diagnostics).includes('certificate details must not be shown'), false);
+});
+
+test('reports HTTP status codes from the regional server', async () => {
+  const diagnostics = [];
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 503;
+      callback(response);
+      response.end('service unavailable');
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, onDiagnostic: event => diagnostics.push(event) });
+  await auth.login({ username: 'private@example.com', password: 'local-secret' });
+  assert.equal(diagnostics[0].code, 503);
+  assert.equal(diagnostics[0].errorCode, 'HTTP_503');
+  assert.match(diagnostics[0].reason, /HTTP 503/);
+});
