@@ -253,6 +253,7 @@
     status.textContent = 'Сохраняю данные и подключаюсь к облаку TP-Link…';
     resultBox.replaceChildren();
     let persistCredentials = false;
+    let retainCredentialsForMfa = false;
     try {
       const credentials = await saveTapoCredentials();
       persistCredentials = true;
@@ -377,6 +378,7 @@
       }
       if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
         persistCredentials = false;
+        retainCredentialsForMfa = true;
         byId('tapo-mfa-wrap').hidden = false;
         if (result.code === 'mfa_required') byId('tapo-mfa').focus();
       } else {
@@ -399,7 +401,9 @@
           status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
         }
       }
-      byId('tapo-password').value = '';
+      if (!retainCredentialsForMfa) {
+        byId('tapo-password').value = '';
+      }
       byId('tapo-mfa').value = '';
       button.disabled = false;
     }
