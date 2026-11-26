@@ -348,9 +348,23 @@ async function probeTapoThingCloud(options = {}) {
             reading.energyUsage = energyUsage;
             const fields = ['today_energy', 'month_energy', 'today_runtime', 'month_runtime',
               'current_power', 'local_time'];
+            const unitByField = {
+              today_energy: ' Wh',
+              month_energy: ' Wh',
+              today_runtime: ' min',
+              month_runtime: ' min',
+              current_power: ' mW'
+            };
             const safeSummary = fields
               .filter(key => energyUsage && energyUsage[key] !== undefined)
-              .map(key => key + '=' + String(energyUsage[key]))
+              .map(key => {
+                const raw = energyUsage[key];
+                const unit = unitByField[key] || '';
+                if (key === 'current_power' && Number.isFinite(Number(raw))) {
+                  return key + '=' + String(raw) + ' mW (' + (Number(raw) / 1000).toFixed(3) + ' W)';
+                }
+                return key + '=' + String(raw) + unit;
+              })
               .join('; ');
             diagnostic(diagnostics, 'energy_usage', 'success', summaryStarted, {
               count: index + 1,
