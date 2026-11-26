@@ -153,7 +153,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
     ? Math.round((energyData.end_timestamp - energyData.start_timestamp) / 86400)
     : null;
   const localTime = typeof energyData.local_time === 'string' &&
-    /^\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2}:\\d{2})?$/.test(energyData.local_time)
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/.test(energyData.local_time)
     ? energyData.local_time
     : null;
   const localDate = localTime ? localTime.slice(0, 10) : null;
