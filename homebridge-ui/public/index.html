@@ -426,7 +426,7 @@
           credentialsSaved = saved.saved;
           status.textContent += saved.saved
             ? ' · данные аккаунта сохранены'
-            : ' · проверка выполнена, но платформа ещё не настроена — данные не сохранены';
+            : ' · блок конфигурации платформы не найден — данные не сохранены';
         } catch (saveError) {
           status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
         }
