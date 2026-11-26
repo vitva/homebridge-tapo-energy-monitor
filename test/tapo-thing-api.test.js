@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const tls = require('node:tls');
-const { TapoThingApi, validateThingHost, cloudApiError } = require('../src/tapo-thing-api');
+const { TapoThingApi, validateThingHost, cloudApiError, classifyThingError } = require('../src/tapo-thing-api');
 
 test('validates only HTTPS TP-Link Thing API hosts', () => {
   assert.equal(validateThingHost('https://eu-app-server.iot.i.tplinkcloud.com/'),
@@ -79,4 +79,19 @@ test('requires a non-empty cloud session token', () => {
     host: 'https://eu-app-server.iot.i.tplinkcloud.com',
     token: ''
   }), /session token is required/);
+});
+
+
+test('classifies Thing API network and HTTP failures without leaking raw messages', () => {
+  assert.deepEqual(classifyThingError(Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })), {
+    errorCode: 'ECONNRESET', reason: 'Сервер или сеть неожиданно разорвали соединение.'
+  });
+  assert.deepEqual(classifyThingError(Object.assign(new Error('request timed out'), { code: 'ETIMEDOUT' })), {
+    errorCode: 'ETIMEDOUT', reason: 'Истекло время ожидания ответа Thing API.'
+  });
+  assert.deepEqual(classifyThingError(Object.assign(new Error('HTTP 429'), { statusCode: 429, code: 'HTTP_429' })), {
+    errorCode: 'HTTP_429', httpStatus: 429, reason: 'Сервер Thing API вернул HTTP 429.'
+  });
+  assert.equal(classifyThingError(new Error('secret token must never be shown')).reason,
+    'Не удалось завершить запрос к Thing API.');
 });
