@@ -637,3 +637,35 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
   assert.match(crosscheck.reason, /month_energy не сопоставлен/);
   assert.match(crosscheck.reason, /runtime остаётся отдельной величиной в минутах/);
 });
+
+
+test('reads device usage independently and keeps its rolling periods separate from daily history', async () => {
+  const calls = [];
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getUsage() { return { energy_data: { data: [] } }; },
+      async getEnergyUsage() {
+        return { today_runtime: 13, month_runtime: 240, today_energy: 100, month_energy: 900,
+          local_time: '2026-11-27 12:00:00' };
+      },
+      async getDeviceUsage() {
+        calls.push('get_device_usage');
+        return { time_usage: { today: 13, past7: 120, past30: 420 },
+          power_usage: { today: 100, past7: 700, past30: 2800 } };
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['get_device_usage']);
+  assert.deepEqual(result.readings[0].deviceUsage.time_usage,
+    { today: 13, past7: 120, past30: 420 });
+  assert.equal(result.readings[0].energyUsage.today_runtime, 13);
+  assert.equal(result.diagnostics.find(item => item.stage === 'device_usage').status, 'success');
+});
