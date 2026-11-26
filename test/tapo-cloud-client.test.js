@@ -552,6 +552,10 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
     },
     apiFactory: () => ({
       async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Europe/Moscow' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
       async getUsage() {
         return {
           energy_data: {
