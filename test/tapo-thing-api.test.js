@@ -188,3 +188,48 @@ test('uses the documented read-only Thing resource endpoints', async () => {
   assert.ok(calls.some(call => call.url.endsWith('/v1/things/models/model-1')));
   await assert.rejects(client.getThingResource('p110m-1', 'unsupported'), /Unsupported read-only/);
 });
+
+
+test('reads the separate Tapo energy and runtime summary through the Thing usage endpoint', async () => {
+  let call;
+  const fakeRequest = (url, options, callback) => {
+    call = { url: String(url), method: options.method, body: null };
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const req = new EventEmitter();
+    req.end = body => {
+      call.body = body;
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding = () => {};
+      callback(response);
+      response.end(JSON.stringify({
+        error_code: 0,
+        data: {
+          today_energy: 296,
+          month_energy: 1234,
+          today_runtime: 0,
+          month_runtime: 17,
+          current_power: 12500,
+          local_time: '2026-11-27 00:55:00'
+        }
+      }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token',
+    termId: 'test-term',
+    request: fakeRequest,
+    caPath: require('node:path').join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')
+  });
+  const usage = await client.getEnergyUsage('p110m-1');
+  assert.equal(call.method, 'POST');
+  assert.ok(call.url.endsWith('/v1/things/p110m-1/usage'));
+  assert.deepEqual(JSON.parse(call.body), { method: 'get_energy_usage', params: {} });
+  assert.equal(usage.today_energy, 296);
+  assert.equal(usage.today_runtime, 0);
+  assert.equal(usage.current_power, 12500);
+});
