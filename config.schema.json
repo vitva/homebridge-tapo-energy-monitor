@@ -19,13 +19,13 @@
         "description": "Enable only to run an explicit simulation. The platform stays idle by default."
       },
       "enableMatterMeter": {
-        "title": "Publish Matter energy sensor",
+        "title": "Publish Matter Electrical Meter",
         "type": "boolean",
         "default": true,
-        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.2.0 or later. Publishes estimated totals only; real Tapo counters will be a separate meter."
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes an Electrical Meter device with estimated totals only; real Tapo counters will be kept separate."
       },
       "matterMeterName": {
-        "title": "Matter sensor name",
+        "title": "Matter meter name",
         "type": "string",
         "default": "Tapo Energy — Расчётная"
       },
