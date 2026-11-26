@@ -10,18 +10,18 @@ A Homebridge 2 Matter platform for Tapo energy monitoring and combined consumpti
 - accepts multiple simulated devices with unique IDs, names, model labels, and power values;
 - stores data locally in `tapo-energy-history.json`;
 - aggregates estimated Wh per device and for the combined group;
-- optionally publishes one virtual Matter Electrical Sensor with the combined **estimated** active power and cumulative estimated energy.
+- optionally publishes one virtual Matter **Electrical Meter** with the combined **estimated** active power and cumulative estimated imported energy.
 
-The Matter sensor is deliberately named **Tapo Energy — Расчётная**. It does not pretend to be a real electricity meter. The real-counter Matter sensor is not published until the physical Tapo adapter can supply verified cumulative counters. This prevents real and estimated values from being mixed or represented as real measurements.
+The Matter accessory is deliberately named **Tapo Energy — Расчётная**. It uses the dedicated Matter Electrical Meter device type, but its readings are still estimates and it does not claim to be a calibrated/billing meter. A separate real-data meter will only be published after the physical Tapo adapter can supply verified cumulative counters. This prevents real and estimated values from being mixed or represented as real measurements.
 
 ### Matter requirements and limitations
 
-- Homebridge 2.2.0 or later, with Matter enabled on the bridge hosting this platform.
+- Homebridge 2.5.0 or later, with Matter enabled on the bridge hosting this platform. Homebridge 2.5.0 exposes the dedicated `ElectricalMeter` device type.
 - Apple Home on iOS/tvOS 27 or later for the current energy-monitoring interface. Apple has changed the Energy view across releases; bridged-device visibility may require iOS/tvOS 27.3 or later.
 - Pair the Matter-enabled Homebridge bridge using its **Matter** pairing code, not its HAP QR code.
-- The plugin publishes both live active power and the cumulative-energy Matter attribute. **Apple Home may show live W without exposing the lifetime kWh value or daily/monthly/yearly history in its UI.** Those display details must be checked on the actual Apple Home version and hub. The plugin's own dashboard retains the full local history.
+- The plugin publishes the Electrical Meter device type with live active power and cumulative imported-energy attributes. **Apple Home may show live W without exposing the lifetime kWh value or daily/monthly/yearly history in its UI.** Those display details must be checked on the actual Apple Home version and hub. The plugin's own dashboard retains the full local history.
 - Apple Home's per-device historical usage charts are a separate feature and may depend on a supported utility account; they are not created merely by publishing Matter energy attributes.
-- If Matter is not enabled on the bridge, the plugin continues its local dashboard and logs why the Matter sensor was skipped.
+- If Matter is not enabled, or the Homebridge version does not expose `ElectricalMeter`, the plugin continues its local dashboard and logs why the Matter meter was skipped.
 
 Matter power is sent in milliwatts (mW); cumulative energy is sent in milliwatt-hours (mWh). The local dashboard continues to show watts (W) and watt-hours (Wh).
 
@@ -98,7 +98,7 @@ npm test
 npm run lint
 ```
 
-To test Matter export, enable Matter for the Homebridge bridge that hosts this platform and leave **Publish Matter energy sensor** enabled. Do not pair the HAP code when testing this Matter sensor.
+To test Matter export, use Homebridge 2.5.0 or later, enable Matter for the bridge that hosts this platform, and leave **Publish Matter energy sensor** enabled. The prototype registers `api.matter.deviceTypes.ElectricalMeter` and deliberately does not downgrade to `ElectricalSensor` on older versions. Do not pair the HAP code when testing this Matter sensor.
 
 ## Data and calculation
 
