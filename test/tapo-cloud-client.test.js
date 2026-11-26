@@ -458,7 +458,7 @@ test('uses the device region for exclusive end-boundary date mapping', () => {
 test('calculates the current quarter start in the device timezone', () => {
   const end = 1795726800; // 2026-11-27 00:00 Europe/Moscow
   assert.equal(buildQuarterStartTimestamp('Europe/Moscow', end), 1790802000);
-  assert.equal(buildQuarterStartTimestamp('Europe/Helsinki', end), 1790805600);
+  assert.equal(buildQuarterStartTimestamp('Europe/Helsinki', end), 1790802000);
 });
 
 test('performs a second read-only usage request from the quarter boundary', async () => {
