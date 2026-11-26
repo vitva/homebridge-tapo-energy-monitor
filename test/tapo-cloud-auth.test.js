@@ -358,12 +358,19 @@ test('bundles the TP-Link Cloud Server intermediate and its issuing root CA', ()
   const pem = fs.readFileSync(path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem'), 'utf8');
   const certificates = [...pem.matchAll(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)]
     .map(match => new X509Certificate(match[0]));
-  assert.equal(certificates.length, 2);
-  const [intermediate, root] = certificates;
-  assert.match(intermediate.subject, /CN=TP-Link Cloud Server CA/);
-  assert.match(intermediate.issuer, /CN=TP-Link Cloud Root CA/);
-  assert.equal(intermediate.issuer, root.subject);
-  assert.equal(root.subject, root.issuer);
-  assert.equal(intermediate.verify(root.publicKey), true);
-  assert.equal(root.verify(root.publicKey), true);
+  assert.equal(certificates.length, 4);
+  const [tapoIntermediate, tapoRoot, tplinkIntermediate, tplinkRoot] = certificates;
+  assert.match(tapoIntermediate.subject, /CN=TP-Link Cloud Server CA/);
+  assert.match(tapoIntermediate.issuer, /CN=TP-Link Cloud Root CA/);
+  assert.equal(tapoIntermediate.issuer, tapoRoot.subject);
+  assert.equal(tapoRoot.subject, tapoRoot.issuer);
+  assert.equal(tapoIntermediate.verify(tapoRoot.publicKey), true);
+  assert.equal(tapoRoot.verify(tapoRoot.publicKey), true);
+
+  assert.match(tplinkIntermediate.subject, /CN=TP-LINK CA P1/);
+  assert.match(tplinkIntermediate.issuer, /CN=tp-link-CA/);
+  assert.equal(tplinkIntermediate.issuer, tplinkRoot.subject);
+  assert.equal(tplinkRoot.subject, tplinkRoot.issuer);
+  assert.equal(tplinkIntermediate.verify(tplinkRoot.publicKey), true);
+  assert.equal(tplinkRoot.verify(tplinkRoot.publicKey), true);
 });
