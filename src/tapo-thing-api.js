@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
+const tls = require('node:tls');
 
 const THING_SUFFIX = '-app-server.iot.i.tplinkcloud.com';
 const DEFAULT_APP = 'TP-Link_Tapo_Android';
@@ -44,7 +45,7 @@ function cloudApiError(payload) {
 function requestJson(url, options = {}) {
   const request = options.request || https.request;
   const caPath = options.caPath || path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem');
-  const ca = fs.readFileSync(caPath);
+  const ca = [...tls.rootCertificates, fs.readFileSync(caPath)];
   const timeoutMs = Math.max(5000, Math.min(60000, Number(options.timeoutMs) || 20000));
 
   return new Promise((resolve, reject) => {
