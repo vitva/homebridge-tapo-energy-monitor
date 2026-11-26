@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feature/node-tapo-thing-cloud]
+    branches: [main, feature/node-tapo-thing-cloud, ci/node-only-validation]
 
 jobs:
   test:
