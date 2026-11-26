@@ -81,9 +81,9 @@ All persistent history is written under the Homebridge storage directory returne
 
 ## Compatibility and verification preparation
 
-- Homebridge 2.2.0 or later; the CI loader check currently uses Homebridge 2.5.0.
+- Homebridge 2.5.0 or later; this is the minimum required for the dedicated Matter Electrical Meter type.
 - Node.js 22, 24, and 26 are tested in CI.
-- The package declares `supports-matter` only because it registers a Matter Electrical Sensor directly and does not publish HAP accessories.
+- The package declares `supports-matter` because it registers a Matter Electrical Meter directly and does not publish HAP accessories.
 - No install or post-install script modifies the Homebridge host.
 - No analytics or telemetry is included.
 - GitHub issues are enabled and the source is public.
@@ -98,7 +98,7 @@ npm test
 npm run lint
 ```
 
-To test Matter export, use Homebridge 2.5.0 or later, enable Matter for the bridge that hosts this platform, and leave **Publish Matter energy sensor** enabled. The prototype registers `api.matter.deviceTypes.ElectricalMeter` and deliberately does not downgrade to `ElectricalSensor` on older versions. Do not pair the HAP code when testing this Matter sensor.
+To test Matter export, use Homebridge 2.5.0 or later, enable Matter for the bridge that hosts this platform, and leave **Publish Matter Electrical Meter** enabled. The prototype registers `api.matter.deviceTypes.ElectricalMeter` and deliberately does not downgrade to `ElectricalSensor` on older versions. Do not pair the HAP code when testing this Matter sensor.
 
 ## Data and calculation
 
