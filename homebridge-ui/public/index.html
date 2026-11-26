@@ -272,7 +272,7 @@
             statusNames[item.status] || item.status,
             Number.isFinite(item.durationMs) ? item.durationMs + ' мс' : '—',
             Number.isInteger(item.code) ? String(item.code) : (item.errorCode || '—'),
-            item.reason || '—'
+            item.reason || (Number.isInteger(item.httpStatus) ? 'HTTP ' + item.httpStatus : '—')
           ]) {
             const td = document.createElement('td'); td.textContent = value;
             if (value === (item.reason || '—')) { td.style.minWidth = '280px'; td.style.whiteSpace = 'normal'; td.style.overflowWrap = 'anywhere'; }
@@ -287,7 +287,7 @@
         resultBox.append(diagnosticScroll);
         const privacyNote = document.createElement('p');
         privacyNote.className = 'small text-muted';
-        privacyNote.textContent = 'Отчёт показывает этапы, длительность, код и безопасное пояснение TP-Link. Пароль, email, код MFA и токены скрываются.';
+        privacyNote.textContent = 'Отчёт показывает этапы, длительность, HTTP-статус, сетевой код и безопасное пояснение ошибки. Пароль, email, код MFA и токены не выводятся.';
         resultBox.append(privacyNote);
       }
       if (result.ok) {
