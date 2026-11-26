@@ -649,4 +649,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildPowerDataRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory };
