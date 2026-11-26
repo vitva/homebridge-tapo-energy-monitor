@@ -158,6 +158,7 @@
         tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
       });
       await refresh();
+      await refreshWattImports();
       window.setInterval(refresh, 15000);
     } catch (error) {
       showMessage('Homebridge UI initialization failed: ' + error.message, 'danger');
@@ -221,7 +222,8 @@
       button.disabled = false;
     }
   }
-\n  async function testTapoCloud() {
+
+  async function testTapoCloud() {
     const button = byId('tapo-test');
     const status = byId('tapo-test-status');
     const resultBox = byId('tapo-test-result');
@@ -358,7 +360,9 @@
     }
   }
 
-  byId('tapo-test').addEventListener('click', testTapoCloud);\n  byId('watt-import').addEventListener('click', importWattCsv);\n  byId('watt-kind').addEventListener('change', () => { byId('watt-label-wrap').hidden = byId('watt-kind').value !== 'individual'; });
+  byId('tapo-test').addEventListener('click', testTapoCloud);
+  byId('watt-import').addEventListener('click', importWattCsv);
+  byId('watt-kind').addEventListener('change', () => { byId('watt-label-wrap').hidden = byId('watt-kind').value !== 'individual'; });
   byId('refresh').addEventListener('click', refresh);
   homebridge.addEventListener('ready', init);
 })();
