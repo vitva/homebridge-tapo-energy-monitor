@@ -25,6 +25,7 @@ function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
   if (typeof details.errorCode === 'string') entry.errorCode = details.errorCode;
   if (Number.isInteger(details.httpStatus)) entry.httpStatus = details.httpStatus;
   if (typeof details.reason === 'string') entry.reason = details.reason.slice(0, 180);
+  if (typeof details.timeZone === 'string') entry.timeZone = details.timeZone;
   diagnostics.push(entry);
 }
 
@@ -139,7 +140,12 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
-      valueUnit: 'unconfirmed'
+      valueUnit: 'unconfirmed',
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      startTimestamp: energyData.start_timestamp ?? null,
+      endTimestamp: energyData.end_timestamp,
+      interval: energyData.interval,
+      alignmentVerified: false
     }
   };
 }
@@ -196,7 +202,9 @@ async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) 
       if (kind === 'settings' && typeof payload?.region === 'string') deviceRegion = payload.region;
       diagnostic(diagnostics, stage, 'success', started, {
         count: index + 1,
-        reason: summarizeCloudResource(kind, payload)
+        reason: kind === 'settings'
+          ? summarizeCloudResource(kind, payload) + (deviceRegion ? '; region=' + deviceRegion : '; region не найден')
+          : summarizeCloudResource(kind, payload)
       });
     } catch (error) {
       const failure = classifyThingError(error);
