@@ -365,11 +365,6 @@ async function probeTapoThingCloud(options = {}) {
               reason: 'Не удалось получить отдельную сводку today/month energy и runtime: ' + failure.reason
             });
           }
-        } else {
-          diagnostic(diagnostics, 'energy_usage', 'skipped', Date.now(), {
-            count: index + 1,
-            reason: 'Текущий API-адаптер не предоставляет отдельный запрос get_energy_usage.'
-          });
         }
 
         readings.push(reading);
