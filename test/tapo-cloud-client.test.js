@@ -406,7 +406,7 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.meta.requestedDays, 61);
   assert.equal(parsed.meta.returnedDays, 91);
   assert.equal(parsed.meta.rangeMismatch, true);
-  assert.equal(parsed.meta.valueUnit, 'unconfirmed');
+  assert.equal(parsed.meta.valueUnit, 'Wh');
   assert.equal(parsed.meta.timeZone, 'Europe/Moscow');
   assert.equal(parsed.meta.startTimestamp, 1790456400);
   assert.equal(parsed.meta.endTimestamp, 1795726800);
@@ -539,4 +539,47 @@ test('performs a second read-only usage request from the quarter boundary', asyn
   assert.match(comparison.reason, /ненулевые совпадения=3\/3/);
   assert.match(comparison.reason, /samples=/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
+});
+
+
+test('keeps Tapo daily Wh history separate from runtime and cross-check summary fields', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getUsage() {
+        return {
+          energy_data: {
+            data: [296, 0],
+            start_timestamp: 1795726800,
+            end_timestamp: 1795903200,
+            local_time: '2026-11-27 00:55:00',
+            interval: 1440
+          }
+        };
+      },
+      async getEnergyUsage() {
+        return {
+          today_energy: 296,
+          month_energy: 1234,
+          today_runtime: 0,
+          month_runtime: 17,
+          current_power: 12500,
+          local_time: '2026-11-27 00:55:00'
+        };
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.readings[0].history.meta.valueUnit, 'Wh');
+  assert.equal(result.readings[0].history.records[0].value, 296);
+  assert.equal(result.readings[0].energyUsage.today_energy, 296);
+  assert.equal(result.readings[0].energyUsage.today_runtime, 0);
+  assert.ok(result.diagnostics.some(item => item.stage === 'energy_usage' && item.status === 'success'));
 });
