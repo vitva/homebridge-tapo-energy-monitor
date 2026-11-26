@@ -48,6 +48,33 @@ function signBody(bodyJson, urlPath, nonce = crypto.randomUUID()) {
   };
 }
 
+function classifyTransportError(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const message = typeof error?.message === 'string' ? error.message : '';
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /getaddrinfo/i.test(message)) {
+    return { code, reason: 'DNS: не удалось найти адрес сервера TP-Link.' };
+  }
+  if (code === 'ETIMEDOUT' || /timed out|timeout/i.test(message)) {
+    return { code: code || 'ETIMEDOUT', reason: 'Тайм-аут: сервер TP-Link не ответил вовремя.' };
+  }
+  if (/CERT_|TLS|SSL|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|SELF_SIGNED/i.test(code)) {
+    return { code, reason: 'TLS: ошибка проверки сертификата или защищённого соединения.' };
+  }
+  if (code === 'ECONNREFUSED') return { code, reason: 'Соединение отклонено сервером или сетью.' };
+  if (code === 'ECONNRESET' || code === 'EPIPE') return { code, reason: 'Соединение было неожиданно сброшено.' };
+  if (code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || code === 'ENETDOWN') {
+    return { code, reason: 'Сетевой маршрут до сервера TP-Link недоступен.' };
+  }
+  if (code === 'ENOENT' && /certificate|\.pem/i.test(message)) {
+    return { code, reason: 'Не найден локальный файл сертификата TP-Link.' };
+  }
+  if (/response is too large/i.test(message)) {
+    return { code: 'RESPONSE_TOO_LARGE', reason: 'Ответ сервера TP-Link превышает допустимый размер.' };
+  }
+  return { code: /^[A-Z0-9_]{1,64}$/.test(code) ? code : 'NETWORK_ERROR',
+    reason: 'Не удалось завершить защищённый запрос к серверу TP-Link.' };
+}
+
 function postJson(url, bodyJson, headers, options = {}) {
   const request = options.request || https.request;
   const timeoutMs = Math.max(5000, Math.min(60000, Number(options.timeoutMs) || 15000));
@@ -66,7 +93,11 @@ function postJson(url, bodyJson, headers, options = {}) {
     }, response => {
       if (response.statusCode >= 300 && response.statusCode < 400) {
         response.resume();
-        reject(new Error('TP-Link cloud redirect was rejected.'));
+        const error = new Error('TP-Link cloud redirect was rejected.');
+        error.diagnosticReason = 'Сервер перенаправил запрос (HTTP ' + response.statusCode + '); перенаправление отклонено.';
+        error.transportCode = 'HTTP_' + response.statusCode;
+        error.diagnosticCode = response.statusCode;
+        reject(error);
         return;
       }
       let raw = '';
@@ -79,7 +110,11 @@ function postJson(url, bodyJson, headers, options = {}) {
       });
       response.on('end', () => {
         if (response.statusCode !== 200) {
-          reject(new Error('TP-Link cloud returned HTTP ' + response.statusCode + '.'));
+          const error = new Error('TP-Link cloud returned HTTP ' + response.statusCode + '.');
+          error.diagnosticReason = 'Сервер TP-Link вернул HTTP ' + response.statusCode + '.';
+          error.transportCode = 'HTTP_' + response.statusCode;
+          error.diagnosticCode = response.statusCode;
+          reject(error);
           return;
         }
         try {
@@ -91,12 +126,21 @@ function postJson(url, bodyJson, headers, options = {}) {
           if (!Number.isFinite(code)) throw new Error('invalid response');
           resolve(payload);
         } catch {
-          reject(new Error('TP-Link cloud returned an invalid response.'));
+          const error = new Error('TP-Link cloud returned an invalid response.');
+          error.diagnosticReason = 'Сервер TP-Link вернул ответ в неожиданном формате.';
+          error.transportCode = 'INVALID_RESPONSE';
+          reject(error);
         }
       });
     });
     req.on('timeout', () => req.destroy(new Error('TP-Link cloud request timed out.')));
-    req.on('error', () => reject(new Error('Could not complete a secure request to TP-Link cloud.')));
+    req.on('error', error => {
+      const detail = classifyTransportError(error);
+      const safeError = new Error(detail.reason);
+      safeError.diagnosticReason = detail.reason;
+      safeError.transportCode = detail.code;
+      reject(safeError);
+    });
     req.end(bodyJson);
   });
 }
@@ -138,6 +182,10 @@ class TapoCloudAuth {
     if (!this.onDiagnostic) return;
     const safe = {};
     if (Number.isInteger(details.code)) safe.code = details.code;
+    if (typeof details.reason === 'string') safe.reason = details.reason.slice(0, 160);
+    if (typeof details.errorCode === 'string' && /^[A-Z0-9_]{1,64}$/.test(details.errorCode)) {
+      safe.errorCode = details.errorCode;
+    }
     this.onDiagnostic({ stage, status, durationMs: Math.max(0, Date.now() - startedAt), ...safe });
   }
 
@@ -211,8 +259,13 @@ class TapoCloudAuth {
       }
       this.report(stage, 'success', stageStarted);
       return this.authResult(login.result, regionalHost);
-    } catch {
-      this.report(stage, 'failed', stageStarted);
+    } catch (error) {
+      const detail = classifyTransportError(error);
+      this.report(stage, 'failed', stageStarted, {
+        code: Number.isInteger(error?.diagnosticCode) ? error.diagnosticCode : undefined,
+        reason: error?.diagnosticReason || detail.reason,
+        errorCode: error?.transportCode || detail.code
+      });
       return { ok: false, code: 'cloud_error', message: 'Не удалось безопасно подключиться к облаку TP-Link.' };
     }
   }
