@@ -5,7 +5,10 @@ const path = require('node:path');
 const https = require('node:https');
 const tls = require('node:tls');
 
-const THING_SUFFIX = '-app-server.iot.i.tplinkcloud.com';
+const THING_SUFFIXES = [
+  '-app-server.iot.i.tplinkcloud.com',
+  '-app-server.iot.i.tplinknbu.com'
+];
 const DEFAULT_APP = 'TP-Link_Tapo_Android';
 const DEFAULT_VERSION = '3.13.818';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -18,7 +21,8 @@ function validateThingHost(raw) {
     throw new Error('TP-Link returned an invalid Thing API host.');
   }
   const host = parsed.hostname.toLowerCase();
-  const prefix = host.endsWith(THING_SUFFIX) ? host.slice(0, -THING_SUFFIX.length) : '';
+  const suffix = THING_SUFFIXES.find(item => host.endsWith(item));
+  const prefix = suffix ? host.slice(0, -suffix.length) : '';
   if (parsed.protocol !== 'https:' || parsed.username || parsed.password ||
       parsed.port || parsed.pathname !== '/' || parsed.search || parsed.hash ||
       !prefix || !/^[a-z0-9-]+$/.test(prefix)) {
@@ -65,8 +69,11 @@ function requestJson(url, options = {}) {
 
   return new Promise((resolve, reject) => {
     const req = request(url, {
-      method: 'GET',
-      headers: options.headers,
+      method: options.method || 'GET',
+      headers: {
+        ...(options.headers || {}),
+        ...(typeof options.body === 'string' ? { 'Content-Length': Buffer.byteLength(options.body) } : {})
+      },
       ca,
       rejectUnauthorized: true,
       timeout: timeoutMs
@@ -105,7 +112,7 @@ function requestJson(url, options = {}) {
       req.destroy(error);
     });
     req.on('error', error => reject(error));
-    req.end();
+    req.end(options.body);
   });
 }
 
@@ -207,10 +214,32 @@ class TapoThingApi {
     return payload.data ?? payload;
   }
 
-  async getUsage(thingName, thingHost = this.host) {
+  async getUsage(thingName, thingHost = this.host, range = {}) {
     const host = validateThingHost(thingHost);
+    const startTimestamp = Number(range.start_timestamp);
+    const endTimestamp = Number(range.end_timestamp);
+    const interval = Number(range.interval);
+    if (!Number.isSafeInteger(startTimestamp) || !Number.isSafeInteger(endTimestamp) ||
+        endTimestamp <= startTimestamp || !Number.isSafeInteger(interval) || interval < 1 || interval > 43200) {
+      throw new Error('A valid Tapo energy history time range is required.');
+    }
     const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
-    const payload = await this.getJson(url);
+    const body = JSON.stringify({
+      method: 'get_energy_data',
+      params: {
+        end_timestamp: endTimestamp,
+        interval,
+        start_timestamp: startTimestamp
+      }
+    });
+    const payload = await requestJson(url, {
+      request: this.request,
+      caPath: this.caPath,
+      timeoutMs: this.timeoutMs,
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      method: 'POST',
+      body
+    });
     return payload.data ?? payload;
   }
 }

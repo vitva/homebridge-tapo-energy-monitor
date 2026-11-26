@@ -28,6 +28,66 @@ function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
   diagnostics.push(entry);
 }
 
+function buildDailyUsageRange(region, now = Date.now(), days = 60) {
+  let timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    });
+    formatter.format(new Date(now));
+  } catch {
+    timeZone = 'UTC';
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23'
+    });
+  }
+
+  const partsOf = value => Object.fromEntries(
+    formatter.formatToParts(value)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, Number(part.value)])
+  );
+  const localNow = partsOf(new Date(now));
+  const localMidnightUtc = Date.UTC(localNow.year, localNow.month - 1, localNow.day);
+  const startDate = new Date(localMidnightUtc - days * 86400000);
+  const endDate = new Date(localMidnightUtc + 86400000);
+
+  const toLocalMidnight = date => {
+    const target = date.getTime();
+    let guess = target;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const local = partsOf(new Date(guess));
+      const representedAsUtc = Date.UTC(
+        local.year, local.month - 1, local.day,
+        local.hour, local.minute, local.second
+      );
+      guess = target - (representedAsUtc - guess);
+    }
+    return Math.floor(guess / 1000);
+  };
+
+  return {
+    start_timestamp: toLocalMidnight(startDate),
+    end_timestamp: toLocalMidnight(endDate),
+    interval: 1440
+  };
+}
+
 function summarizeCloudResource(kind, payload) {
   if (!payload || typeof payload !== 'object') return 'Ответ получен; структура не распознана.';
   if (kind === 'shadows' || kind === 'matter_shadows') {
@@ -61,6 +121,7 @@ function summarizeCloudResource(kind, payload) {
 }
 
 async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) {
+  let deviceRegion = null;
   const checks = [
     ['cloud_details', () => api.getThingResource(String(item.device.id), 'details', host), 'details'],
     ['cloud_rt_info', () => api.getThingResource(String(item.device.id), 'rt-info', host), 'rt-info'],
@@ -76,6 +137,7 @@ async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) 
     const started = Date.now();
     try {
       const payload = await request();
+      if (kind === 'settings' && typeof payload?.region === 'string') deviceRegion = payload.region;
       diagnostic(diagnostics, stage, 'success', started, {
         count: index + 1,
         reason: summarizeCloudResource(kind, payload)
@@ -90,6 +152,7 @@ async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) 
       });
     }
   }
+  return deviceRegion;
 }
 
 async function probeTapoThingCloud(options = {}) {
@@ -144,13 +207,15 @@ async function probeTapoThingCloud(options = {}) {
     if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
     for (let index = 0; index < candidates.length; index += 1) {
       const item = candidates[index];
-      const usageHost = item.thing.appServerUrlV2 || host;
+      const usageHost = item.thing.appServerUrlV2 || item.thing.appServerUrl || host;
+      let deviceRegion = null;
       if (typeof api.getThingResource === 'function' && typeof api.getShadows === 'function') {
-        await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
+        deviceRegion = await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
       }
+      const usageRange = buildDailyUsageRange(deviceRegion);
       const usageStarted = Date.now();
       try {
-        const usage = await api.getUsage(String(item.device.id), usageHost);
+        const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
         readings.push({ id: item.device.id, usage });
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
       } catch (error) {
@@ -198,4 +263,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange };
