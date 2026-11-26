@@ -278,3 +278,73 @@ test('reports HTTP status codes from the regional server', async () => {
   assert.equal(diagnostics[0].errorCode, 'HTTP_503');
   assert.match(diagnostics[0].reason, /HTTP 503/);
 });
+
+
+test('shows the TP-Link authentication rejection reason without leaking account secrets', async () => {
+  const replies = [
+    { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } },
+    { error_code: -20601, msg: 'Invalid username or password for private@example.com; session token ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' }
+  ];
+  const diagnostics = [];
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify(replies.shift()));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({
+    request,
+    termId: 'test-terminal',
+    onDiagnostic: event => diagnostics.push(event)
+  });
+  const result = await auth.login({
+    username: 'private@example.com',
+    password: 'private-password-value'
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'auth_failed');
+  const rejection = diagnostics.find(item => item.stage === 'authentication');
+  assert.equal(rejection.code, -20601);
+  assert.match(rejection.reason, /Invalid username or password/);
+  assert.equal(JSON.stringify({ result, diagnostics }).includes('private@example.com'), false);
+  assert.equal(JSON.stringify({ result, diagnostics }).includes('private-password-value'), false);
+  assert.equal(JSON.stringify({ result, diagnostics }).includes('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), false);
+});
+
+test('redacts MFA values and limits TP-Link server diagnostic text', async () => {
+  const replies = [
+    { error_code: 0, result: { appServerUrl: 'https://eu1.tplinkcloud.com' } },
+    { error_code: -20677, msg: 'MFA required' },
+    { error_code: -20678, msg: 'Invalid code 654321 for private@example.com' }
+  ];
+  const diagnostics = [];
+  const request = (_url, _options, callback) => {
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding('utf8');
+      callback(response);
+      response.end(JSON.stringify(replies.shift()));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const auth = new TapoCloudAuth({ request, onDiagnostic: event => diagnostics.push(event) });
+  await auth.login({
+    username: 'private@example.com',
+    password: 'private-password-value',
+    mfaCode: '654321'
+  });
+  const rejection = diagnostics.find(item => item.status === 'failed');
+  assert.match(rejection.reason, /Invalid code/);
+  assert.equal(JSON.stringify(diagnostics).includes('654321'), false);
+  assert.equal(JSON.stringify(diagnostics).includes('private@example.com'), false);
+});
