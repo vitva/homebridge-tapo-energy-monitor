@@ -153,7 +153,64 @@
     }
   }
 
-  async function testTapoCloud() {
+
+  function renderWattImports(data) {
+    const target = byId('watt-results');
+    target.replaceChildren();
+    for (const kind of ['individual', 'aggregate']) {
+      const item = data && data[kind];
+      if (!item) continue;
+      const heading = document.createElement('h6');
+      heading.textContent = item.label + ' · ' + item.recordCount + ' дней';
+      const summary = document.createElement('p');
+      summary.className = 'small text-muted';
+      summary.textContent = 'Watt CSV · ' + number(item.totalWh / 1000, 3) + ' kWh · ' + (item.records[0]?.date || '—') + ' — ' + (item.records[item.records.length - 1]?.date || '—') + ' · импорт: ' + new Date(item.importedAt).toLocaleString();
+      const table = document.createElement('table');
+      table.className = 'table table-sm';
+      const body = document.createElement('tbody');
+      for (const [period, values] of [['Месяцы', item.monthly], ['Годы', item.yearly]]) {
+        for (const [key, wh] of Object.entries(values || {}).sort((a, b) => a[0].localeCompare(b[0]))) {
+          const tr = document.createElement('tr');
+          const left = document.createElement('td'); left.textContent = period + ' · ' + key;
+          const right = document.createElement('td'); right.className = 'text-end'; right.textContent = number(wh / 1000, 3) + ' kWh';
+          tr.append(left, right); body.append(tr);
+        }
+      }
+      table.append(body); target.append(heading, summary, table);
+    }
+    if (!target.childNodes.length) target.textContent = 'Пока нет импортированных файлов Watt.';
+  }
+
+  async function refreshWattImports() {
+    const data = await homebridge.request('/watt-imports');
+    renderWattImports(data);
+  }
+
+  async function importWattCsv() {
+    const button = byId('watt-import');
+    const status = byId('watt-status');
+    const file = byId('watt-file').files[0];
+    if (!file) { status.textContent = 'Выбери CSV-файл.'; return; }
+    if (file.size > 1024 * 1024) { status.textContent = 'Файл больше 1 МБ.'; return; }
+    button.disabled = true;
+    status.textContent = 'Проверяю и импортирую CSV…';
+    try {
+      const csv = await file.text();
+      const result = await homebridge.request('/watt-import', {
+        kind: byId('watt-kind').value,
+        label: byId('watt-label').value,
+        csv
+      });
+      status.textContent = 'Импортировано: ' + result.recordCount + ' дней, ' + number(result.totalWh / 1000, 3) + ' kWh.';
+      byId('watt-file').value = '';
+      await refreshWattImports();
+    } catch (error) {
+      status.textContent = 'Ошибка импорта: ' + error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+\n  async function testTapoCloud() {
     const button = byId('tapo-test');
     const status = byId('tapo-test-status');
     const resultBox = byId('tapo-test-result');
@@ -290,7 +347,7 @@
     }
   }
 
-  byId('tapo-test').addEventListener('click', testTapoCloud);
+  byId('tapo-test').addEventListener('click', testTapoCloud);\n  byId('watt-import').addEventListener('click', importWattCsv);\n  byId('watt-kind').addEventListener('change', () => { byId('watt-label-wrap').hidden = byId('watt-kind').value !== 'individual'; });
   byId('refresh').addEventListener('click', refresh);
   homebridge.addEventListener('ready', init);
 })();
