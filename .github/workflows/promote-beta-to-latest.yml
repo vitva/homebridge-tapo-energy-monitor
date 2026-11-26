@@ -1,0 +1,37 @@
+name: Promote beta to latest npm tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_promote:
+        description: Move latest to the already-published 0.2.0-beta.1
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/feature/node-tapo-thing-cloud' && inputs.confirm_promote
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Verify npm credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "Repository Actions secret NPM_TOKEN is not configured." >&2
+            exit 1
+          fi
+      - name: Promote published beta to latest
+        run: npm dist-tag add homebridge-tapo-energy-monitor@0.2.0-beta.1 latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify npm dist-tags
+        run: npm dist-tag ls homebridge-tapo-energy-monitor
