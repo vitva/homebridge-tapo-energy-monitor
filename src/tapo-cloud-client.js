@@ -273,7 +273,9 @@ async function probeTapoThingCloud(options = {}) {
       try {
         const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
         const history = normalizeDailyEnergyHistory(usage, deviceRegion || 'UTC');
-        readings.push({ id: item.device.id, usage, history: history.ok ? history : null });
+        const reading = { id: item.device.id, usage };
+        if (history.ok) reading.history = history;
+        readings.push(reading);
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
         const formatStarted = Date.now();
         diagnostic(diagnostics, 'usage_format', history.ok ? 'success' : 'failed', formatStarted, {
