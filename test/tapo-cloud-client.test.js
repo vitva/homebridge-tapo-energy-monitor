@@ -555,8 +555,8 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
       async getUsage() {
         return {
           energy_data: {
-            data: [296, 0],
-            start_timestamp: 1795726800,
+            data: [296],
+            start_timestamp: 1795813200,
             end_timestamp: 1795903200,
             local_time: '2026-11-27 00:55:00',
             interval: 1440
@@ -582,4 +582,7 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
   assert.equal(result.readings[0].energyUsage.today_energy, 296);
   assert.equal(result.readings[0].energyUsage.today_runtime, 0);
   assert.ok(result.diagnostics.some(item => item.stage === 'energy_usage' && item.status === 'success'));
+  const crosscheck = result.diagnostics.find(item => item.stage === 'usage_crosscheck');
+  assert.equal(crosscheck.status, 'success');
+  assert.match(crosscheck.reason, /today_energy=296 Wh; последняя дневная запись=296 Wh; разница=0 Wh/);
 });
