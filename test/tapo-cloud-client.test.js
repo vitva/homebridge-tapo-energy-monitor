@@ -320,6 +320,48 @@ test('probes read-only P110M cloud resources and reports model service names', a
 });
 
 
+
+test('uses UTC fallback for an invalid region and keeps full history diagnostics', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Mars/Olympus' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage(_id, _host, range) {
+        return {
+          energy_data: {
+            data: Array.from({ length: 91 }, (_, index) => index),
+            start_timestamp: range.start_timestamp,
+            end_timestamp: range.end_timestamp,
+            interval: 1440
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.readings[0].history.meta.timeZoneKnown, false);
+  assert.equal(result.readings[0].history.meta.timeZoneSource, 'UTC_fallback');
+  const settings = result.diagnostics.find(item => item.stage === 'cloud_settings');
+  assert.match(settings.reason, /Mars\/Olympus/);
+  assert.match(settings.reason, /UTC fallback/);
+  const usageFormat = result.diagnostics.find(item => item.stage === 'usage_format');
+  assert.match(usageFormat.reason, /start=/);
+  assert.match(usageFormat.reason, /end=/);
+  assert.match(usageFormat.reason, /запрошено точек=61/);
+  assert.match(usageFormat.reason, /получено=91/);
+  assert.ok(usageFormat.reason.length > 180);
+});
+
 test('builds daily energy history timestamps in the device timezone across DST', () => {
   const now = Date.UTC(2026, 10, 26, 12, 0, 0);
   const range = buildDailyUsageRange('Europe/Helsinki', now, 60);
