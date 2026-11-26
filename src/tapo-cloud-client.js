@@ -90,6 +90,21 @@ function buildDailyUsageRange(region, now = Date.now(), days = 60) {
 }
 
 
+function buildPowerDataRange(interval, now = Date.now()) {
+  if (interval !== 5 && interval !== 60) {
+    throw new Error('Unsupported Tapo power history interval.');
+  }
+  const intervalSeconds = interval * 60;
+  const endTimestamp = Math.floor(Math.floor(now / 1000) / intervalSeconds) * intervalSeconds;
+  const maxPoints = 144;
+  return {
+    start_timestamp: endTimestamp - intervalSeconds * maxPoints,
+    end_timestamp: endTimestamp,
+    interval
+  };
+}
+
+
 function buildQuarterStartTimestamp(region, endTimestamp) {
   const timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -405,6 +420,39 @@ async function probeTapoThingCloud(options = {}) {
               httpStatus: failure.httpStatus,
               reason: 'Не удалось получить отдельную сводку today/past7/past30: ' + failure.reason
             });
+          }
+        }
+
+        // Power samples are raw historical measurements (W), not runtime minutes.
+        // Request both documented granularities, each bounded to the 144-point API limit.
+        if (typeof api.getPowerData === 'function') {
+          for (const interval of [5, 60]) {
+            const powerRange = buildPowerDataRange(interval);
+            const powerStarted = Date.now();
+            try {
+              const powerData = await api.getPowerData(String(item.device.id), usageHost, powerRange);
+              const key = interval === 5 ? 'powerData5m' : 'powerDataHourly';
+              reading[key] = powerData;
+              const values = Array.isArray(powerData?.data) ? powerData.data : [];
+              const missing = values.filter(value => value === null || value === -1).length;
+              const valid = values.filter(value => Number.isFinite(value) && value >= 0);
+              const safePower = 'интервал=' + interval + ' мин; точек=' + values.length +
+                '; значений мощности=' + valid.length + '; нет данных=' + missing +
+                '; начало=' + (powerData.start_timestamp ?? '—') +
+                '; конец=' + (powerData.end_timestamp ?? '—') +
+                '; единицы ответа: W';
+              diagnostic(diagnostics, interval === 5 ? 'power_data_5m' : 'power_data_hourly',
+                'success', powerStarted, { count: index + 1, reason: safePower });
+            } catch (error) {
+              const failure = classifyThingError(error);
+              diagnostic(diagnostics, interval === 5 ? 'power_data_5m' : 'power_data_hourly',
+                'failed', powerStarted, {
+                  count: index + 1,
+                  errorCode: failure.errorCode,
+                  httpStatus: failure.httpStatus,
+                  reason: 'Не удалось получить историю мощности (' + interval + ' мин): ' + failure.reason
+                });
+            }
           }
         }
 
