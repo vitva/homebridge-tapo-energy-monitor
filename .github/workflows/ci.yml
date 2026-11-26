@@ -40,7 +40,7 @@ jobs:
           console.log('Homebridge 2 ESM loader compatibility passed.');
           NODE
       - name: Build and install package in isolated Homebridge runtime
-        if: matrix.node-version == 22
+        if: matrix.node-version == 22 || matrix.node-version == 26
         shell: bash
         run: |
           set -euo pipefail
