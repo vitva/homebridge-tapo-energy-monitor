@@ -262,7 +262,8 @@
           authentication: 'Авторизация / MFA',
           thing_service: 'Поиск Thing API',
           device_list: 'Список устройств',
-          usage: 'Энергопоказания P110M'
+          usage: 'Энергопоказания P110M',
+          usage_format: 'Разбор дневной истории'
         };
         const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA', skipped: 'Пропущено' };
         for (const item of result.diagnostics) {
@@ -310,8 +311,11 @@
           const model = document.createElement('td'); model.textContent = device.model || '—';
           const reading = readings.get(device.id);
           const state = document.createElement('td');
-          if (reading && reading.usage) {
-            state.textContent = 'Получен ответ Thing Cloud API';
+          if (reading && reading.usage && reading.history && reading.history.ok) {
+            const meta = reading.history.meta;
+            state.textContent = 'Предварительно: ' + meta.count + ' точек · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + ' · ' + (meta.timeZone || 'UTC') + (meta.timeZoneKnown ? '' : ' (UTC fallback)') + ' · даты требуют сверки';
+          } else if (reading && reading.usage) {
+            state.textContent = 'Ответ Thing Cloud API получен; формат истории не подтверждён';
           } else if (reading && reading.error) {
             state.textContent = reading.error;
           } else if (String(device.model || '').toUpperCase().includes('P110M')) {
@@ -339,10 +343,10 @@
           }
         }
         table.append(body); resultBox.append(table);
-        if (result.p110mCount > 0 && !(result.readings || []).some(item => typeof item.powerW === 'number')) {
+        if (result.p110mCount > 0 && !(result.readings || []).some(item => item.history && item.history.ok)) {
           const note = document.createElement('div');
           note.className = 'alert alert-warning';
-          note.textContent = 'Аккаунт и P110M обнаружены, но формат ответа энергомониторинга пока не подтверждён.';
+          note.textContent = 'Аккаунт и P110M обнаружены, но дневную историю в ответе облака распознать не удалось.';
           resultBox.append(note);
         }
       }

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -58,7 +58,7 @@ test('runs cloud login, Thing discovery, listing and read-only P110M usage', asy
   assert.equal(result.p110mCount, 1);
   assert.deepEqual(result.diagnostics.map(item => [item.stage, item.status]), [
     ['authentication', 'success'], ['thing_service', 'success'],
-    ['device_list', 'success'], ['usage', 'success']
+    ['device_list', 'success'], ['usage', 'success'], ['usage_format', 'failed']
   ]);
   assert.ok(result.diagnostics.every(item => Number.isInteger(item.durationMs) && item.durationMs >= 0));
   assert.deepEqual(result.readings, [{ id: 'p110m-1', usage: { today: 1.25, history: [] } }]);
@@ -320,6 +320,48 @@ test('probes read-only P110M cloud resources and reports model service names', a
 });
 
 
+
+test('uses UTC fallback for an invalid region and keeps full history diagnostics', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Mars/Olympus' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage(_id, _host, range) {
+        return {
+          energy_data: {
+            data: Array.from({ length: 91 }, (_, index) => index),
+            start_timestamp: range.start_timestamp,
+            end_timestamp: range.end_timestamp,
+            interval: 1440
+          }
+        };
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.readings[0].history.meta.timeZoneKnown, false);
+  assert.equal(result.readings[0].history.meta.timeZoneSource, 'UTC_fallback');
+  const settings = result.diagnostics.find(item => item.stage === 'cloud_settings');
+  assert.match(settings.reason, /Mars\/Olympus/);
+  assert.match(settings.reason, /UTC fallback/);
+  const usageFormat = result.diagnostics.find(item => item.stage === 'usage_format');
+  assert.match(usageFormat.reason, /start=/);
+  assert.match(usageFormat.reason, /end=/);
+  assert.match(usageFormat.reason, /запрошено точек=61/);
+  assert.match(usageFormat.reason, /получено=91/);
+  assert.ok(usageFormat.reason.length > 180);
+});
+
 test('builds daily energy history timestamps in the device timezone across DST', () => {
   const now = Date.UTC(2026, 10, 26, 12, 0, 0);
   const range = buildDailyUsageRange('Europe/Helsinki', now, 60);
@@ -341,4 +383,118 @@ test('falls back to UTC for a missing or invalid device timezone', () => {
   const invalid = buildDailyUsageRange('not/a-timezone', now, 60);
   assert.deepEqual(invalid, missing);
   assert.equal(new Date(missing.end_timestamp * 1000).toISOString(), '2026-11-27T00:00:00.000Z');
+});
+
+
+test('maps daily energy values backward from the exclusive end date', () => {
+  const values = Array.from({ length: 91 }, (_, index) => index === 90 ? 1234 : 0);
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      local_time: '2026-11-26 23:44:26',
+      data: values,
+      start_timestamp: 1790456400,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  }, 'Europe/Moscow');
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.records.length, 91);
+  assert.equal(parsed.records[0].date, '2026-08-28');
+  assert.equal(parsed.records.at(-1).date, '2026-11-26');
+  assert.equal(parsed.records.at(-1).value, 1234);
+  assert.equal(parsed.meta.requestedDays, 61);
+  assert.equal(parsed.meta.returnedDays, 91);
+  assert.equal(parsed.meta.rangeMismatch, true);
+  assert.equal(parsed.meta.valueUnit, 'unconfirmed');
+  assert.equal(parsed.meta.timeZone, 'Europe/Moscow');
+  assert.equal(parsed.meta.startTimestamp, 1790456400);
+  assert.equal(parsed.meta.endTimestamp, 1795726800);
+  assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.records[58].date, '2026-10-25');
+  assert.equal(parsed.records[86].date, '2026-11-22');
+});
+
+test('keeps daily date alignment correct across daylight-saving transitions', () => {
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      data: [10, 20, 30],
+      start_timestamp: 1774652400,
+      end_timestamp: 1774911600,
+      interval: 1440
+    }
+  }, 'Europe/Helsinki');
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.records.length, 3);
+  assert.equal(parsed.records[2].date, '2026-03-30');
+});
+
+test('does not interpret an unknown usage response as daily history', () => {
+  assert.equal(normalizeDailyEnergyHistory({ today: 1.25, history: [] }).ok, false);
+  assert.equal(normalizeDailyEnergyHistory({
+    energy_data: { data: ['12'], end_timestamp: 1795726800, interval: 1440 }
+  }).ok, false);
+});
+
+
+test('uses the device region for exclusive end-boundary date mapping', () => {
+  const payload = {
+    energy_data: {
+      data: Array.from({ length: 91 }, (_, index) => index),
+      start_timestamp: 1790456400,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  };
+  const moscow = normalizeDailyEnergyHistory(payload, 'Europe/Moscow');
+  const helsinki = normalizeDailyEnergyHistory(payload, 'Europe/Helsinki');
+  assert.equal(moscow.records[0].date, '2026-08-28');
+  assert.equal(moscow.records.at(-1).date, '2026-11-26');
+  assert.equal(helsinki.records[0].date, '2026-08-27');
+  assert.equal(helsinki.records.at(-1).date, '2026-11-25');
+});
+
+
+test('calculates the current quarter start in the device timezone', () => {
+  const end = 1795726800; // 2026-11-27 00:00 Europe/Moscow
+  assert.equal(buildQuarterStartTimestamp('Europe/Moscow', end), 1790802000);
+  assert.equal(buildQuarterStartTimestamp('Europe/Helsinki', end), 1790802000);
+});
+
+test('performs a second read-only usage request from the quarter boundary', async () => {
+  const ranges = [];
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Europe/Moscow' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage(_id, _host, range) {
+        ranges.push({ ...range });
+        return {
+          energy_data: {
+            data: [10, 20, 30],
+            start_timestamp: range.start_timestamp,
+            end_timestamp: range.end_timestamp,
+            interval: 1440
+          }
+        };
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(ranges.length, 2);
+  assert.equal(ranges[1].start_timestamp, buildQuarterStartTimestamp('Europe/Moscow', ranges[0].end_timestamp));
+  assert.equal(ranges[1].end_timestamp, ranges[0].end_timestamp);
+  const comparison = result.diagnostics.find(item => item.stage === 'usage_range_compare');
+  assert.equal(comparison.status, 'success');
+  assert.match(comparison.reason, /последовательности совпадают/);
+  assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
