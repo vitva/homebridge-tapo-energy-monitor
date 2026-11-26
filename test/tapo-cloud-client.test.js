@@ -225,3 +225,24 @@ test('attributes Thing API client initialization failures to device listing', as
   assert.equal(serialized.includes('session-secret'), false);
   assert.equal(serialized.includes('private constructor detail'), false);
 });
+
+
+test('includes safe transport diagnostics when a P110M usage request fails', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com', password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getUsage() { throw Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }); }
+    })
+  });
+  const usage = result.diagnostics.find(item => item.stage === 'usage');
+  assert.equal(usage.status, 'failed');
+  assert.equal(usage.errorCode, 'ECONNRESET');
+  assert.equal(usage.reason, 'Сервер или сеть неожиданно разорвали соединение.');
+  assert.equal(result.readings[0].errorCode, 'ECONNRESET');
+  assert.equal(JSON.stringify(result).includes('socket hang up'), false);
+});
