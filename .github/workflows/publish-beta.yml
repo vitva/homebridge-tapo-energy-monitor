@@ -2,19 +2,13 @@ name: Publish beta to npm
 
 on:
   workflow_dispatch:
-    inputs:
-      confirm_publish:
-        description: Stage this beta package for npm approval
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
   publish-beta:
-    if: github.ref == 'refs/heads/release/beta-0.2.0-beta.15' && inputs.confirm_publish
+    if: github.ref == 'refs/heads/fix/node-only-tapo-cloud-beta15'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
