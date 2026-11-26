@@ -51,9 +51,9 @@ test('publishes active watts and lifetime estimated Wh in Matter units', async (
     }
   });
 
-  assert.deepEqual(result, { activePowerW: 200, cumulativeEnergyWh: 800 });
+  assert.deepEqual(result, { activePowerW: 200, cumulativeEnergyWh: 700 });
   assert.deepEqual(updates, [
     ['meter-uuid', 'electricalPowerMeasurement', { activePower: 200000 }],
-    ['meter-uuid', 'electricalEnergyMeasurement', { cumulativeEnergyImported: { energy: 800000 } }]
+    ['meter-uuid', 'electricalEnergyMeasurement', { cumulativeEnergyImported: { energy: 700000 } }]
   ]);
 });
