@@ -390,7 +390,8 @@ async function probeTapoThingCloud(options = {}) {
               (history.meta.firstDate || '—') + ' — ' + (history.meta.lastDate || '—') +
               '; region=' + (deviceRegion || 'не найден; использован UTC') +
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
-              '; единицы=' + history.meta.valueUnit +\n              '; запрошено точек=' + history.meta.requestedDays +
+              '; единицы=' + history.meta.valueUnit +
+              '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
               '; local_time=' + (history.meta.localTime || '—') +
               '; local_date=' + (history.meta.localDate || '—') +
