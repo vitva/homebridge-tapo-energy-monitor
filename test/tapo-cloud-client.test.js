@@ -589,4 +589,6 @@ test('keeps Tapo daily Wh history separate from runtime and cross-check summary 
   const crosscheck = result.diagnostics.find(item => item.stage === 'usage_crosscheck');
   assert.equal(crosscheck.status, 'success');
   assert.match(crosscheck.reason, /today_energy=296 Wh; последняя дневная запись=296 Wh; разница=0 Wh/);
+  assert.match(crosscheck.reason, /month_energy не сопоставлен/);
+  assert.match(crosscheck.reason, /runtime остаётся отдельной величиной в минутах/);
 });
