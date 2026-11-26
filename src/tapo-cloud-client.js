@@ -1,7 +1,7 @@
 'use strict';
 
 const { TapoCloudAuth } = require('./tapo-cloud-auth');
-const { TapoThingApi } = require('./tapo-thing-api');
+const { TapoThingApi, classifyThingError } = require('./tapo-thing-api');
 
 function normalizeThing(thing) {
   const model = String(thing?.model || thing?.deviceModel || '');
@@ -22,6 +22,9 @@ function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
   };
   if (Number.isInteger(details.code)) entry.code = details.code;
   if (Number.isInteger(details.count)) entry.count = details.count;
+  if (typeof details.errorCode === 'string') entry.errorCode = details.errorCode;
+  if (Number.isInteger(details.httpStatus)) entry.httpStatus = details.httpStatus;
+  if (typeof details.reason === 'string') entry.reason = details.reason.slice(0, 180);
   diagnostics.push(entry);
 }
 
@@ -84,12 +87,19 @@ async function probeTapoThingCloud(options = {}) {
         readings.push({ id: item.device.id, usage });
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
       } catch (error) {
+        const failure = classifyThingError(error);
         readings.push({
           id: item.device.id,
-          error: 'Не удалось прочитать энергопоказания из Thing Cloud API.'
+          error: 'Не удалось прочитать энергопоказания из Thing Cloud API.',
+          errorCode: failure.errorCode,
+          httpStatus: failure.httpStatus,
+          reason: failure.reason
         });
         diagnostic(diagnostics, 'usage', 'failed', usageStarted, {
           code: Number.isInteger(error?.code) ? error.code : undefined,
+          errorCode: failure.errorCode,
+          httpStatus: failure.httpStatus,
+          reason: failure.reason,
           count: index + 1
         });
       }
