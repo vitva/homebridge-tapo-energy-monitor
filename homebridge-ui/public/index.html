@@ -313,7 +313,7 @@
           const state = document.createElement('td');
           if (reading && reading.usage && reading.history && reading.history.ok) {
             const meta = reading.history.meta;
-            state.textContent = 'История: ' + meta.count + ' дней · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + (meta.rangeMismatch ? ' · диапазон уточняется' : '');
+            state.textContent = 'Предварительно: ' + meta.count + ' точек · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + ' · ' + (meta.timeZone || 'UTC') + ' · даты требуют сверки';
           } else if (reading && reading.usage) {
             state.textContent = 'Ответ Thing Cloud API получен; формат истории не подтверждён';
           } else if (reading && reading.error) {
