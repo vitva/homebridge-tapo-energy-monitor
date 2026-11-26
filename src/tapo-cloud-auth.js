@@ -75,6 +75,21 @@ function classifyTransportError(error) {
     reason: 'Не удалось завершить защищённый запрос к серверу TP-Link.' };
 }
 
+function safeServerMessage(value, secrets = []) {
+  if (typeof value !== 'string') return '';
+  let message = value.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.length >= 3) {
+      message = message.split(secret).join('[скрыто]');
+    }
+  }
+  message = message
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email скрыт]')
+    .replace(/\b(?:bearer\s+)?[A-Za-z0-9_-]{32,}\b/gi, '[токен скрыт]')
+    .replace(/https?:\/\/\S+/gi, '[адрес скрыт]')
+    .slice(0, 140);
+  return message;
+}
 function postJson(url, bodyJson, headers, options = {}) {
   const request = options.request || https.request;
   const timeoutMs = Math.max(5000, Math.min(60000, Number(options.timeoutMs) || 15000));
@@ -208,7 +223,7 @@ class TapoCloudAuth {
         cloudUserName: username
       });
       if (Number(status.error_code) !== 0) {
-        this.report(stage, 'failed', stageStarted, { code: Number(status.error_code) });
+        this.report(stage, 'failed', stageStarted, { code: Number(status.error_code), reason: safeServerMessage(status.msg, [username, password, mfaCode]) });
         return { ok: false, code: 'cloud_error', message: 'Не удалось определить региональный сервер TP-Link.' };
       }
       this.report(stage, 'success', stageStarted);
@@ -243,18 +258,18 @@ class TapoCloudAuth {
           terminalUUID: this.termId
         });
         if (Number(verified.error_code) !== 0) {
-          this.report(stage, 'failed', stageStarted, { code: Number(verified.error_code) });
+          this.report(stage, 'failed', stageStarted, { code: Number(verified.error_code), reason: safeServerMessage(verified.msg, [username, password, mfaCode]) });
           return { ok: false, code: 'mfa_failed', message: 'TP-Link не принял код подтверждения. Проверьте код и повторите попытку.' };
         }
         this.report(stage, 'success', stageStarted);
         return this.authResult(verified.result, regionalHost);
       }
       if (loginCode === -20601 || loginCode === -20675) {
-        this.report(stage, 'failed', stageStarted, { code: loginCode });
+        this.report(stage, 'failed', stageStarted, { code: loginCode, reason: safeServerMessage(login.msg, [username, password, mfaCode]) });
         return { ok: false, code: 'auth_failed', message: 'TP-Link отклонил логин или пароль. Проверьте данные аккаунта.' };
       }
       if (loginCode !== 0) {
-        this.report(stage, 'failed', stageStarted, { code: loginCode });
+        this.report(stage, 'failed', stageStarted, { code: loginCode, reason: safeServerMessage(login.msg, [username, password, mfaCode]) });
         return { ok: false, code: 'cloud_error', message: 'TP-Link не завершил авторизацию (код ' + loginCode + ').' };
       }
       this.report(stage, 'success', stageStarted);
