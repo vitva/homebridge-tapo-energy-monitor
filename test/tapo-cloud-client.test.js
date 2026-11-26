@@ -369,6 +369,8 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.meta.startTimestamp, 1790456400);
   assert.equal(parsed.meta.endTimestamp, 1795726800);
   assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.records[58].date, '2026-10-25');
+  assert.equal(parsed.records[86].date, '2026-11-22');
 });
 
 test('keeps daily date alignment correct across daylight-saving transitions', () => {
@@ -390,4 +392,22 @@ test('does not interpret an unknown usage response as daily history', () => {
   assert.equal(normalizeDailyEnergyHistory({
     energy_data: { data: ['12'], end_timestamp: 1795726800, interval: 1440 }
   }).ok, false);
+});
+
+
+test('uses the device region for exclusive end-boundary date mapping', () => {
+  const payload = {
+    energy_data: {
+      data: Array.from({ length: 91 }, (_, index) => index),
+      start_timestamp: 1790456400,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  };
+  const moscow = normalizeDailyEnergyHistory(payload, 'Europe/Moscow');
+  const helsinki = normalizeDailyEnergyHistory(payload, 'Europe/Helsinki');
+  assert.equal(moscow.records[0].date, '2026-08-28');
+  assert.equal(moscow.records.at(-1).date, '2026-11-26');
+  assert.equal(helsinki.records[0].date, '2026-08-27');
+  assert.equal(helsinki.records.at(-1).date, '2026-11-25');
 });
