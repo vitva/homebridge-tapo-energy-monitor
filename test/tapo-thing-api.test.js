@@ -95,3 +95,83 @@ test('classifies Thing API network and HTTP failures without leaking raw message
   assert.equal(classifyThingError(new Error('secret token must never be shown')).reason,
     'Не удалось завершить запрос к Thing API.');
 });
+
+
+test('reads only documented Thing details, telemetry, settings, shadows and model endpoints', async () => {
+  const calls = [];
+  const fakeRequest = (url, options, callback) => {
+    calls.push({ url: String(url), method: options.method });
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding = () => {};
+      callback(response);
+      response.end(JSON.stringify({ error_code: 0, data: { safe: true } }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token',
+    termId: 'test-term',
+    request: fakeRequest,
+    caPath: require('node:path').join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')
+  });
+  await client.getThingResource('p110m-1', 'details');
+  await client.getThingResource('p110m-1', 'rt-info');
+  await client.getThingResource('p110m-1', 'settings');
+  await client.getShadows('p110m-1');
+  await client.getShadows('p110m-1', 'https://eu-app-server.iot.i.tplinkcloud.com', true);
+  await client.getModel('model-1');
+  assert.deepEqual(calls.map(call => call.method), Array(6).fill('GET'));
+  assert.ok(calls.some(call => call.url.endsWith('/v1/things/p110m-1/details')));
+  assert.ok(calls.some(call => call.url.endsWith('/v1/things/p110m-1/rt-info')));
+  assert.ok(calls.some(call => call.url.endsWith('/v1/things/p110m-1/settings')));
+  assert.ok(calls.some(call => call.url.includes('/v1/things/shadows?thingNames=p110m-1')));
+  assert.ok(calls.some(call => call.url.includes('/v1/things/matter/shadows?thingNames=p110m-1')));
+  assert.ok(calls.some(call => call.url.endsWith('/v1/things/models/model-1')));
+  await assert.rejects(client.getThingResource('p110m-1', 'usage-admin'), /Unsupported read-only/);
+});
+
+
+test('uses the documented read-only Thing resource endpoints', async () => {
+  const calls = [];
+  const fakeRequest = (url, options, callback) => {
+    calls.push({ url: String(url), method: options.method });
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const req = new EventEmitter();
+    req.end = () => {
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding = () => {};
+      callback(response);
+      response.end(JSON.stringify({ error_code: 0, data: { ok: true } }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token', termId: 'test-term', request: fakeRequest,
+    caPath: require('node:path').join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')
+  });
+  await client.getThingResource('p110m-1', 'details');
+  await client.getThingResource('p110m-1', 'rt-info');
+  await client.getThingResource('p110m-1', 'settings');
+  await client.getShadows('p110m-1');
+  await client.getShadows('p110m-1', 'https://eu-app-server.iot.i.tplinkcloud.com', true);
+  await client.getModel('model-1');
+  assert.ok(calls.every(call => call.method === 'GET'));
+  for (const suffix of ['/details', '/rt-info', '/settings']) {
+    assert.ok(calls.some(call => call.url.endsWith('/v1/things/p110m-1' + suffix)));
+  }
+  assert.ok(calls.some(call => call.url.includes('/v1/things/shadows?thingNames=p110m-1')));
+  assert.ok(calls.some(call => call.url.includes('/v1/things/matter/shadows?thingNames=p110m-1')));
+  assert.ok(calls.some(call => call.url.endsWith('/v1/things/models/model-1')));
+  await assert.rejects(client.getThingResource('p110m-1', 'unsupported'), /Unsupported read-only/);
+});

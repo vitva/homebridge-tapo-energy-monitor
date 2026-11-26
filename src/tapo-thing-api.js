@@ -172,12 +172,44 @@ class TapoThingApi {
     throw new Error('TP-Link Thing API pagination limit reached.');
   }
 
-  async getUsage(thingName, thingHost = this.host) {
+  validateThingName(thingName) {
     if (typeof thingName !== 'string' || !thingName.trim() || thingName.length > 512) {
       throw new Error('A valid Thing device identifier is required.');
     }
+    return encodeURIComponent(thingName);
+  }
+
+  async getThingResource(thingName, resource, thingHost = this.host) {
+    if (!['details', 'rt-info', 'settings'].includes(resource)) {
+      throw new Error('Unsupported read-only Thing resource.');
+    }
     const host = validateThingHost(thingHost);
-    const url = new URL('/v1/things/' + encodeURIComponent(thingName) + '/usage', host);
+    const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/' + resource, host);
+    const payload = await this.getJson(url);
+    return payload.data ?? payload;
+  }
+
+  async getShadows(thingName, thingHost = this.host, matter = false) {
+    const host = validateThingHost(thingHost);
+    const url = new URL(matter ? '/v1/things/matter/shadows' : '/v1/things/shadows', host);
+    url.searchParams.set('thingNames', thingName);
+    const payload = await this.getJson(url);
+    return payload.data ?? payload;
+  }
+
+  async getModel(modelId, thingHost = this.host) {
+    if (typeof modelId !== 'string' || !modelId.trim() || modelId.length > 512) {
+      throw new Error('A valid Thing model identifier is required.');
+    }
+    const host = validateThingHost(thingHost);
+    const url = new URL('/v1/things/models/' + encodeURIComponent(modelId), host);
+    const payload = await this.getJson(url);
+    return payload.data ?? payload;
+  }
+
+  async getUsage(thingName, thingHost = this.host) {
+    const host = validateThingHost(thingHost);
+    const url = new URL('/v1/things/' + this.validateThingName(thingName) + '/usage', host);
     const payload = await this.getJson(url);
     return payload.data ?? payload;
   }

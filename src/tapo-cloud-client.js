@@ -28,6 +28,70 @@ function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
   diagnostics.push(entry);
 }
 
+function summarizeCloudResource(kind, payload) {
+  if (!payload || typeof payload !== 'object') return 'Ответ получен; структура не распознана.';
+  if (kind === 'shadows' || kind === 'matter_shadows') {
+    const shadows = Array.isArray(payload.shadows) ? payload.shadows : [];
+    const reported = shadows[0]?.state?.reported;
+    const fields = reported && typeof reported === 'object' ? Object.keys(reported).slice(0, 30) : [];
+    return fields.length ? 'Поля reported: ' + fields.join(', ') : 'Ответ получен; reported-состояние не найдено.';
+  }
+  if (kind === 'model') {
+    const services = new Set();
+    const properties = new Set();
+    const visit = (value, parent = '', depth = 0) => {
+      if (depth > 12 || value === null || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        for (const item of value.slice(0, 500)) visit(item, parent, depth + 1);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (typeof child === 'string' && /^(serviceId|service_id)$/i.test(key)) services.add(child);
+        if (typeof child === 'string' && /^(propertyId|property_id|propertyName)$/i.test(key)) properties.add(child);
+        if (typeof child === 'string' && key === 'name' && /service/i.test(parent)) services.add(child);
+        if (typeof child === 'string' && key === 'name' && /propert/i.test(parent)) properties.add(child);
+        if (child && typeof child === 'object') visit(child, key, depth + 1);
+      }
+    };
+    visit(payload);
+    return 'Сервисы: ' + (Array.from(services).slice(0, 30).join(', ') || 'не найдены') +
+      '; свойства: ' + (Array.from(properties).slice(0, 30).join(', ') || 'не найдены');
+  }
+  return 'Поля ответа: ' + Object.keys(payload).slice(0, 30).join(', ');
+}
+
+async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) {
+  const checks = [
+    ['cloud_details', () => api.getThingResource(String(item.device.id), 'details', host), 'details'],
+    ['cloud_rt_info', () => api.getThingResource(String(item.device.id), 'rt-info', host), 'rt-info'],
+    ['cloud_settings', () => api.getThingResource(String(item.device.id), 'settings', host), 'settings'],
+    ['cloud_shadows', () => api.getShadows(String(item.device.id), host, false), 'shadows'],
+    ['cloud_matter_shadows', () => api.getShadows(String(item.device.id), host, true), 'matter_shadows']
+  ];
+  if (item.thing.thingModelId && typeof api.getModel === 'function') {
+    checks.push(['cloud_model', () => api.getModel(String(item.thing.thingModelId), host), 'model']);
+  }
+  for (const [stage, request, kind] of checks) {
+    if (typeof request !== 'function') continue;
+    const started = Date.now();
+    try {
+      const payload = await request();
+      diagnostic(diagnostics, stage, 'success', started, {
+        count: index + 1,
+        reason: summarizeCloudResource(kind, payload)
+      });
+    } catch (error) {
+      const failure = classifyThingError(error);
+      diagnostic(diagnostics, stage, 'failed', started, {
+        count: index + 1,
+        errorCode: failure.errorCode,
+        httpStatus: failure.httpStatus,
+        reason: failure.reason
+      });
+    }
+  }
+}
+
 async function probeTapoThingCloud(options = {}) {
   const diagnostics = [];
   const username = typeof options.username === 'string' ? options.username.trim() : '';
@@ -80,9 +144,12 @@ async function probeTapoThingCloud(options = {}) {
     if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
     for (let index = 0; index < candidates.length; index += 1) {
       const item = candidates[index];
+      const usageHost = item.thing.appServerUrlV2 || host;
+      if (typeof api.getThingResource === 'function' && typeof api.getShadows === 'function') {
+        await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
+      }
       const usageStarted = Date.now();
       try {
-        const usageHost = item.thing.appServerUrlV2 || host;
         const usage = await api.getUsage(String(item.device.id), usageHost);
         readings.push({ id: item.device.id, usage });
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
