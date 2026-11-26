@@ -103,7 +103,7 @@ class TapoEnergyMonitorPlatform {
 
     const accessory = createEstimatedMeterAccessory(this.api, this.config.matterMeterName || 'Tapo Energy — Расчётная');
     if (!accessory) {
-      this.log.warn('Matter meter not registered. Enable Matter on this Homebridge bridge and use Homebridge 2.2.0 or later.');
+      this.log.warn('Matter meter not registered. Enable Matter on this Homebridge bridge and use Homebridge 2.5.0 or later for Electrical Meter support.');
       return;
     }
 
