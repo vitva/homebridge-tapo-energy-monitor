@@ -356,7 +356,7 @@ test('redacts MFA values and limits TP-Link server diagnostic text', async () =>
 
 test('bundles the TP-Link Cloud Server intermediate and its issuing root CA', () => {
   const pem = fs.readFileSync(path.join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem'), 'utf8');
-  const certificates = [...pem.matchAll(/-----BEGIN CERTIFICATE-----[\\s\\S]+?-----END CERTIFICATE-----/g)]
+  const certificates = [...pem.matchAll(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g)]
     .map(match => new X509Certificate(match[0]));
   assert.equal(certificates.length, 2);
   const [intermediate, root] = certificates;
