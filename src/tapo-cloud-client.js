@@ -79,7 +79,8 @@ async function probeTapoThingCloud(options = {}) {
       const item = candidates[index];
       const usageStarted = Date.now();
       try {
-        const usage = await api.getUsage(String(item.device.id));
+        const usageHost = item.thing.appServerUrlV2 || host;
+        const usage = await api.getUsage(String(item.device.id), usageHost);
         readings.push({ id: item.device.id, usage });
         diagnostic(diagnostics, 'usage', 'success', usageStarted, { count: index + 1 });
       } catch (error) {
