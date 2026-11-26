@@ -351,20 +351,62 @@ async function probeTapoThingCloud(options = {}) {
                 end_timestamp: usageRange.end_timestamp,
                 interval: 1440
               });
-              const primaryValues = Array.isArray(usage?.energy_data?.data) ? usage.energy_data.data : [];
-              const quarterValues = Array.isArray(quarterUsage?.energy_data?.data) ? quarterUsage.energy_data.data : [];
+              const primaryEnergy = usage?.energy_data && typeof usage.energy_data === 'object'
+                ? usage.energy_data : {};
+              const quarterEnergy = quarterUsage?.energy_data && typeof quarterUsage.energy_data === 'object'
+                ? quarterUsage.energy_data : {};
+              const primaryValues = Array.isArray(primaryEnergy.data) ? primaryEnergy.data : [];
+              const quarterValues = Array.isArray(quarterEnergy.data) ? quarterEnergy.data : [];
               const sameCount = primaryValues.length === quarterValues.length;
               const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === quarterValues[valueIndex]);
+              let bestOffset = 0;
+              let bestNonZeroMatches = -1;
+              let bestNonZeroCompared = 0;
+              for (let offset = -7; offset <= 7; offset += 1) {
+                let matches = 0;
+                let compared = 0;
+                for (let primaryIndex = 0; primaryIndex < primaryValues.length; primaryIndex += 1) {
+                  const quarterIndex = primaryIndex + offset;
+                  if (quarterIndex < 0 || quarterIndex >= quarterValues.length) continue;
+                  const left = primaryValues[primaryIndex];
+                  const right = quarterValues[quarterIndex];
+                  if (left !== 0 || right !== 0) {
+                    compared += 1;
+                    if (left === right) matches += 1;
+                  }
+                }
+                if (matches > bestNonZeroMatches ||
+                    (matches === bestNonZeroMatches && Math.abs(offset) < Math.abs(bestOffset))) {
+                  bestOffset = offset;
+                  bestNonZeroMatches = matches;
+                  bestNonZeroCompared = compared;
+                }
+              }
+              const sample = values => ({
+                first: values.slice(0, 5),
+                last: values.slice(-5)
+              });
+              const primarySample = sample(primaryValues);
+              const quarterSample = sample(quarterValues);
+              const returnedMeta = value => [
+                Number.isInteger(value.start_timestamp) ? value.start_timestamp : '—',
+                Number.isInteger(value.end_timestamp) ? value.end_timestamp : '—',
+                typeof value.local_time === 'string' ? value.local_time.slice(0, 19) : '—'
+              ];
+              const primaryMeta = returnedMeta(primaryEnergy);
+              const quarterMeta = returnedMeta(quarterEnergy);
               diagnostic(diagnostics, 'usage_range_compare', 'success', compareStarted, {
                 count: index + 1,
-                reason: 'Сравнение диапазонов: основной start=' + usageRange.start_timestamp +
-                  ', квартальный start=' + quarterStart + ', общий end=' + usageRange.end_timestamp +
-                  '; точек: ' + primaryValues.length + ' / ' + quarterValues.length +
-                  '; последовательности ' + (sameSequence ? 'совпадают' : 'различаются') +
-                  '; первые/последние значения: ' +
-                  (primaryValues[0] ?? '—') + '/' + (primaryValues.at(-1) ?? '—') + ' и ' +
-                  (quarterValues[0] ?? '—') + '/' + (quarterValues.at(-1) ?? '—') +
-                  '; единицы и календарная привязка не предполагаются.'
+                reason: 'Диапазоны: start/end/local основной=' + primaryMeta.join('/') +
+                  ', квартальный=' + quarterMeta.join('/') +
+                  '; запрошено start=' + usageRange.start_timestamp + '/' + quarterStart +
+                  ', end=' + usageRange.end_timestamp +
+                  '; точек=' + primaryValues.length + '/' + quarterValues.length +
+                  '; совпадение=' + (sameSequence ? 'полное' : 'нет') +
+                  '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
+                  Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
+                  '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(quarterSample) +
+                  '; единицы не подтверждены.'
               });
             } catch (error) {
               const failure = classifyThingError(error);
