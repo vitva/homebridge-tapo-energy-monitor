@@ -236,7 +236,7 @@ class TapoThingApi {
       request: this.request,
       caPath: this.caPath,
       timeoutMs: this.timeoutMs,
-      headers: this.headers,
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
       method: 'POST',
       body
     });
