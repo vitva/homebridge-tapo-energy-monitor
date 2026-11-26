@@ -381,6 +381,40 @@ async function probeTapoThingCloud(options = {}) {
           }
         }
 
+        if (history.ok && reading.energyUsage && typeof reading.energyUsage === 'object') {
+          const energySummary = reading.energyUsage;
+          const latestRecord = history.records.at(-1) || null;
+          const todayEnergy = Number(energySummary.today_energy);
+          const todayComparable = Number.isFinite(todayEnergy) && latestRecord &&
+            history.meta.localDate === latestRecord.date;
+          const todayCheck = todayComparable
+            ? 'today_energy=' + todayEnergy + ' Wh; последняя дневная запись=' +
+              latestRecord.value + ' Wh; разница=' + (latestRecord.value - todayEnergy) + ' Wh'
+            : 'today_energy не сопоставлен: дата последней записи=' +
+              (latestRecord?.date || '—') + '; local_date=' + (history.meta.localDate || '—');
+
+          const monthPrefix = typeof energySummary.local_time === 'string'
+            ? energySummary.local_time.slice(0, 7)
+            : '';
+          const monthRecords = monthPrefix
+            ? history.records.filter(record => record.date.startsWith(monthPrefix))
+            : [];
+          const monthSum = monthRecords.reduce((sum, record) => sum + record.value, 0);
+          const monthComplete = monthRecords.length > 0 &&
+            monthRecords[0].date === monthPrefix + '-01';
+          const monthCheck = Number.isFinite(Number(energySummary.month_energy)) && monthComplete
+            ? 'month_energy=' + Number(energySummary.month_energy) + ' Wh; сумма дневных записей=' +
+              monthSum + ' Wh; разница=' + (monthSum - Number(energySummary.month_energy)) + ' Wh'
+            : 'month_energy не сопоставлен: получено записей за месяц=' + monthRecords.length +
+              '; первая дата=' + (monthRecords[0]?.date || '—');
+
+          diagnostic(diagnostics, 'usage_crosscheck', 'success', Date.now(), {
+            count: index + 1,
+            reason: todayCheck + '; ' + monthCheck +
+              '; runtime остаётся отдельной величиной в минутах и не участвует в суммах Wh.'
+          });
+        }
+
         readings.push(reading);
         const formatStarted = Date.now();
         diagnostic(diagnostics, 'usage_format', history.ok ? 'success' : 'failed', formatStarted, {
