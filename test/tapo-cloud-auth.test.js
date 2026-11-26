@@ -6,6 +6,7 @@ const { EventEmitter } = require('node:events');
 const { PassThrough } = require('node:stream');
 const path = require('node:path');
 const fs = require('node:fs');
+const tls = require('node:tls');
 const { TapoCloudAuth, validateCloudBase, signBody } = require('../src/tapo-cloud-auth');
 
 test('accepts only HTTPS TP-Link cloud base URLs', () => {
@@ -67,7 +68,9 @@ test('performs regional discovery and login using the bundled TP-Link CA', async
   assert.equal(result.refreshToken, 'test-refresh-token');
   assert.equal(calls.length, 2);
   assert.ok(calls.every(call => call.options.method === 'POST' && call.options.rejectUnauthorized === true));
-  assert.ok(calls.every(call => Buffer.isBuffer(call.options.ca) && call.options.ca.length > 0));
+  assert.ok(calls.every(call => Array.isArray(call.options.ca) && call.options.ca.length > tls.rootCertificates.length));
+  assert.ok(calls.every(call => call.options.ca.slice(0, tls.rootCertificates.length).every((cert, index) => cert === tls.rootCertificates[index])));
+  assert.ok(calls.every(call => Buffer.isBuffer(call.options.ca.at(-1)) && call.options.ca.at(-1).length > 0));
   assert.ok(calls[0].url.pathname.endsWith('/getAccountStatusAndUrl'));
   assert.ok(calls[1].url.pathname.endsWith('/login'));
   assert.equal(calls[1].url.hostname, 'eu1.tplinkcloud.com');
