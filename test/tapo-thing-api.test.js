@@ -274,3 +274,51 @@ test('reads the separate rolling device usage summary through the Thing usage en
   assert.deepEqual(usage.time_usage, { today: 62, past7: 410, past30: 1720 });
   assert.deepEqual(usage.power_usage, { today: 296, past7: 1880, past30: 7400 });
 });
+
+
+test('reads bounded 5-minute and hourly power history through the Thing usage endpoint', async () => {
+  const calls = [];
+  const fakeRequest = (url, options, callback) => {
+    calls.push({ url: String(url), method: options.method, body: null });
+    const { EventEmitter } = require('node:events');
+    const { PassThrough } = require('node:stream');
+    const req = new EventEmitter();
+    req.end = body => {
+      calls.at(-1).body = body;
+      const response = new PassThrough();
+      response.statusCode = 200;
+      response.setEncoding = () => {};
+      callback(response);
+      response.end(JSON.stringify({
+        error_code: 0,
+        data: { data: [125, 0, -1, 640], start_timestamp: 1795737600,
+          end_timestamp: 1795738500, interval: JSON.parse(body).params.interval }
+      }));
+    };
+    req.destroy = error => { if (error) req.emit('error', error); };
+    return req;
+  };
+  const client = new TapoThingApi({
+    host: 'https://eu-app-server.iot.i.tplinkcloud.com',
+    token: 'test-token',
+    termId: 'test-term',
+    request: fakeRequest,
+    caPath: require('node:path').join(__dirname, '..', 'helpers', 'tplink-cloud-server-ca.pem')
+  });
+  const range5m = { start_timestamp: 1795737600, end_timestamp: 1795741200, interval: 5 };
+  const rangeHourly = { start_timestamp: 1795222800, end_timestamp: 1795737600, interval: 60 };
+  const five = await client.getPowerData('p110m-1', undefined, range5m);
+  const hourly = await client.getPowerData('p110m-1', undefined, rangeHourly);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.method === 'POST' && call.url.endsWith('/v1/things/p110m-1/usage')));
+  assert.deepEqual(JSON.parse(calls[0].body), { method: 'get_power_data', params: range5m });
+  assert.deepEqual(JSON.parse(calls[1].body), { method: 'get_power_data', params: rangeHourly });
+  assert.deepEqual(five.data, [125, 0, -1, 640]);
+  assert.equal(hourly.interval, 60);
+  await assert.rejects(client.getPowerData('p110m-1', undefined, {
+    start_timestamp: 1, end_timestamp: 999999999, interval: 5
+  }), /valid bounded Tapo power history/);
+  await assert.rejects(client.getPowerData('p110m-1', undefined, {
+    start_timestamp: 1, end_timestamp: 999999, interval: 15
+  }), /valid bounded Tapo power history/);
+});
