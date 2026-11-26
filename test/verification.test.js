@@ -13,7 +13,7 @@ test('declares Homebridge Matter platform support and supported Node LTS version
   assert.ok(pkg.keywords.includes('homebridge-plugin'));
   assert.ok(pkg.keywords.includes('supports-matter'));
   assert.ok(!pkg.keywords.includes('supports-hap'));
-  assert.equal(pkg.engines.homebridge, '>=2.2.0');
+  assert.equal(pkg.engines.homebridge, '>=2.5.0');
   assert.equal(pkg.engines.node, '^22.12.0 || ^24.0.0 || ^26.0.0');
 });
 
