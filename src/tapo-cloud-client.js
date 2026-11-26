@@ -207,7 +207,7 @@ async function probeTapoThingCloud(options = {}) {
     if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
     for (let index = 0; index < candidates.length; index += 1) {
       const item = candidates[index];
-      const usageHost = item.thing.appServerUrlV2 || host;
+      const usageHost = item.thing.appServerUrlV2 || item.thing.appServerUrl || host;
       let deviceRegion = null;
       if (typeof api.getThingResource === 'function' && typeof api.getShadows === 'function') {
         deviceRegion = await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
