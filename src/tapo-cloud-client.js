@@ -385,8 +385,9 @@ async function probeTapoThingCloud(options = {}) {
           const energySummary = reading.energyUsage;
           const latestRecord = history.records.at(-1) || null;
           const todayEnergy = Number(energySummary.today_energy);
-          const todayComparable = Number.isFinite(todayEnergy) && latestRecord &&
-            history.meta.localDate === latestRecord.date;
+          const todayComparable = energySummary.today_energy !== null &&
+            energySummary.today_energy !== undefined && Number.isFinite(todayEnergy) &&
+            latestRecord && history.meta.localDate === latestRecord.date;
           const todayCheck = todayComparable
             ? 'today_energy=' + todayEnergy + ' Wh; последняя дневная запись=' +
               latestRecord.value + ' Wh; разница=' + (latestRecord.value - todayEnergy) + ' Wh'
@@ -402,7 +403,9 @@ async function probeTapoThingCloud(options = {}) {
           const monthSum = monthRecords.reduce((sum, record) => sum + record.value, 0);
           const monthComplete = monthRecords.length > 0 &&
             monthRecords[0].date === monthPrefix + '-01';
-          const monthCheck = Number.isFinite(Number(energySummary.month_energy)) && monthComplete
+          const monthCheck = energySummary.month_energy !== null &&
+            energySummary.month_energy !== undefined &&
+            Number.isFinite(Number(energySummary.month_energy)) && monthComplete
             ? 'month_energy=' + Number(energySummary.month_energy) + ' Wh; сумма дневных записей=' +
               monthSum + ' Wh; разница=' + (monthSum - Number(energySummary.month_energy)) + ' Wh'
             : 'month_energy не сопоставлен: получено записей за месяц=' + monthRecords.length +
