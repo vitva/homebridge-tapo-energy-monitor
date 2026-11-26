@@ -27,6 +27,20 @@ function validateThingHost(raw) {
   return 'https://' + host;
 }
 
+function classifyThingError(error) {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const status = Number.isInteger(error?.statusCode) ? error.statusCode : undefined;
+  if (status) return { errorCode: 'HTTP_' + status, httpStatus: status, reason: 'Сервер Thing API вернул HTTP ' + status + '.' };
+  if (code === 'ETIMEDOUT' || /timed out|timeout/i.test(error?.message || '')) return { errorCode: 'ETIMEDOUT', reason: 'Истекло время ожидания ответа Thing API.' };
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return { errorCode: code, reason: 'Не удалось найти адрес сервера Thing API (DNS).' };
+  if (code === 'ECONNRESET' || code === 'EPIPE') return { errorCode: code, reason: 'Сервер или сеть неожиданно разорвали соединение.' };
+  if (code === 'ECONNREFUSED') return { errorCode: code, reason: 'Соединение с сервером Thing API отклонено.' };
+  if (code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || code === 'ENETDOWN') return { errorCode: code, reason: 'Сетевой маршрут до сервера Thing API недоступен.' };
+  if (/CERT_|TLS|SSL|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|SELF_SIGNED/i.test(code)) return { errorCode: code, reason: 'Ошибка TLS: сертификат сервера не прошёл проверку.' };
+  if (/response is too large/i.test(error?.message || '')) return { errorCode: 'RESPONSE_TOO_LARGE', reason: 'Ответ сервера превышает допустимый размер.' };
+  return { errorCode: code && /^[A-Z0-9_]{1,64}$/.test(code) ? code : 'NETWORK_ERROR', reason: 'Не удалось завершить запрос к Thing API.' };
+}
+
 function cloudApiError(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('TP-Link returned an invalid Thing API response.');
@@ -71,7 +85,10 @@ function requestJson(url, options = {}) {
       });
       response.on('end', () => {
         if (response.statusCode !== 200) {
-          reject(new Error('TP-Link Thing API returned HTTP ' + response.statusCode + '.'));
+          const error = new Error('TP-Link Thing API returned HTTP ' + response.statusCode + '.');
+          error.statusCode = response.statusCode;
+          error.code = 'HTTP_' + response.statusCode;
+          reject(error);
           return;
         }
         try {
@@ -81,7 +98,11 @@ function requestJson(url, options = {}) {
         }
       });
     });
-    req.on('timeout', () => req.destroy(new Error('TP-Link Thing API request timed out.')));
+    req.on('timeout', () => {
+      const error = new Error('TP-Link Thing API request timed out.');
+      error.code = 'ETIMEDOUT';
+      req.destroy(error);
+    });
     req.on('error', error => reject(error));
     req.end();
   });
@@ -161,4 +182,4 @@ class TapoThingApi {
   }
 }
 
-module.exports = { TapoThingApi, validateThingHost, cloudApiError };
+module.exports = { TapoThingApi, validateThingHost, cloudApiError, classifyThingError };
