@@ -45,24 +45,15 @@ The cloud route is unofficial/reverse-engineered and may change if TP-Link chang
 
 ### Tapo cloud diagnostic (read-only)
 
-The custom Homebridge UI includes a **Проверка облака TP-Link Tapo** panel with two selectable transports: **Python (reference implementation)** and **Node.js (experimental)**. Both use the Tapo cloud only; the Node.js option implements Tapo V2 account authentication directly and does not require Python. It:
+The custom Homebridge UI includes a **Проверка облака TP-Link Tapo** panel. It uses the built-in Node.js Tapo V2 client exclusively. It:
 - logs in to the Tapo cloud only (no Kasa login, device IP or dacha LAN access);
 - requests an email MFA code only when TP-Link actually challenges the login; the code field stays hidden otherwise;
-- displays a safe stage report (status, elapsed time and numeric API error code) without passwords, MFA codes or session tokens; the Node.js transport separates regional server discovery from account authentication, while the Python library reports login as one combined stage;
+- displays a safe stage report (status, elapsed time and numeric API error code) without passwords, MFA codes or session tokens; regional server discovery is separated from account authentication;
 - lists devices returned by the Tapo cloud account;
 - discovers devices through the Tapo Thing API and requests the read-only `/usage` resource for discovered P110M devices;
 - never sends relay, power, reboot, reset or configuration commands.
 
-The Tapo email and password are saved in the platform configuration (`config.json`) after a completed cloud check and are prefilled the next time the settings UI opens. If TP-Link requests MFA, the first attempt keeps the settings session open; the one-time MFA code is never saved. The password is stored in plain text by Homebridge, so protect `config.json`, its backups and access to the Homebridge UI. Credentials are submitted to the local Homebridge UI server over its plugin request channel and are never written to plugin logs or diagnostic reports. The Python transport passes credentials to its helper over stdin; the experimental Node.js transport keeps them in the in-memory request flow. The cloud session token is held only for the short-lived diagnostic request and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
-
-The Python reference transport requires Python 3.10+ and the optional dependency in `requirements-cloud.txt`. Create a virtual environment inside the Homebridge container, install the requirements there, then set **Python executable for Tapo cloud** in the plugin settings to that environment's Python path. The experimental Node.js transport does not require this Python environment:
-
-```sh
-python3 -m venv /path/to/tapo-cloud-venv
-/path/to/tapo-cloud-venv/bin/pip install -r /path/to/homebridge-tapo-energy-monitor/requirements-cloud.txt
-```
-
-For example, the configured executable would be `/path/to/tapo-cloud-venv/bin/python`. The venv and package must exist in the same container/filesystem where Homebridge runs.
+The Tapo email and password are saved in the platform configuration (`config.json`) after a completed cloud check and are prefilled the next time the settings UI opens. If TP-Link requests MFA, the first attempt keeps the settings session open; the one-time MFA code is never saved. The password is stored in plain text by Homebridge, so protect `config.json`, its backups and access to the Homebridge UI. Credentials are submitted to the local Homebridge UI server over its plugin request channel and are never written to plugin logs or diagnostic reports. Credentials stay in the in-memory Node.js request flow. The cloud session token is held only for the short-lived diagnostic request and is not persisted. Thing API TLS verification uses the TP-Link Cloud Server CA; redirects and unexpected Thing API hostnames are rejected.
 
 This is a connectivity diagnostic, not production polling. A successful login and device listing do not prove that the P110M `/usage` response contains valid current power and history. The Node.js client currently returns the vendor payload without interpreting it; test fixtures are deliberately synthetic and do not describe the real TP-Link schema. The returned structure must be captured from a real account and checked for field names, units, time zone, historical bucket semantics, and counter behavior before wiring it into the store.
 
@@ -97,7 +88,7 @@ All persistent history is written under the Homebridge storage directory returne
 - No analytics or telemetry is included.
 - GitHub issues are enabled and the source is public.
 
-The plugin is **not yet ready to submit for Verified By Homebridge review**: production cloud polling and verified real-device energy aggregation are not implemented, and the current Tapo cloud check still uses an optional Python helper. The verification request also requires an npm-published release and release notes. Do not describe the plugin as verified or submit a request until those gaps are closed.
+The plugin is **not yet ready to submit for Verified By Homebridge review**: production cloud polling and verified real-device energy aggregation are not implemented, and the current Tapo cloud check is diagnostic-only. The verification request also requires an npm-published release and release notes. Do not describe the plugin as verified or submit a request until those gaps are closed.
 
 ## Development
 
