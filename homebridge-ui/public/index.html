@@ -315,6 +315,7 @@
           thing_service: 'Поиск Thing API',
           device_list: 'Список устройств',
           usage: 'Энергопоказания P110M',
+          energy_usage: 'Сводка: Wh и минуты работы',
           usage_format: 'Разбор дневной истории'
         };
         const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA', skipped: 'Пропущено' };
@@ -365,7 +366,7 @@
           const state = document.createElement('td');
           if (reading && reading.usage && reading.history && reading.history.ok) {
             const meta = reading.history.meta;
-            state.textContent = 'Предварительно: ' + meta.count + ' точек · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + ' · ' + (meta.timeZone || 'UTC') + (meta.timeZoneKnown ? '' : ' (UTC fallback)') + ' · даты требуют сверки';
+            state.textContent = 'Предварительно: ' + meta.count + ' точек · Wh · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + ' · ' + (meta.timeZone || 'UTC') + (meta.timeZoneKnown ? '' : ' (UTC fallback)') + ' · даты требуют сверки';
           } else if (reading && reading.usage) {
             state.textContent = 'Ответ Thing Cloud API получен; формат истории не подтверждён';
           } else if (reading && reading.error) {
@@ -387,7 +388,7 @@
             pre.className = 'small bg-light p-2 mt-2';
             pre.style.maxHeight = '320px';
             pre.style.overflow = 'auto';
-            pre.textContent = JSON.stringify(reading.usage, null, 2);
+            pre.textContent = JSON.stringify({ energy_usage: reading.energyUsage || null, energy_data: reading.usage }, null, 2);
             details.append(summary, pre);
             detailCell.append(details);
             detailRow.append(detailCell);
