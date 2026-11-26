@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -341,4 +341,49 @@ test('falls back to UTC for a missing or invalid device timezone', () => {
   const invalid = buildDailyUsageRange('not/a-timezone', now, 60);
   assert.deepEqual(invalid, missing);
   assert.equal(new Date(missing.end_timestamp * 1000).toISOString(), '2026-11-27T00:00:00.000Z');
+});
+
+
+test('maps daily energy values backward from the exclusive end date', () => {
+  const values = Array.from({ length: 91 }, (_, index) => index === 90 ? 1234 : 0);
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      local_time: '2026-11-26 23:44:26',
+      data: values,
+      start_timestamp: 1790456400,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  }, 'Europe/Helsinki');
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.records.length, 91);
+  assert.equal(parsed.records[0].date, '2026-08-28');
+  assert.equal(parsed.records.at(-1).date, '2026-11-26');
+  assert.equal(parsed.records.at(-1).value, 1234);
+  assert.equal(parsed.meta.requestedDays, 61);
+  assert.equal(parsed.meta.returnedDays, 91);
+  assert.equal(parsed.meta.rangeMismatch, true);
+  assert.equal(parsed.meta.valueUnit, 'unconfirmed');
+});
+
+test('keeps daily date alignment correct across daylight-saving transitions', () => {
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      data: [10, 20, 30],
+      start_timestamp: 1774652400,
+      end_timestamp: 1774911600,
+      interval: 1440
+    }
+  }, 'Europe/Helsinki');
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.records.length, 3);
+  assert.equal(parsed.records[2].date, '2026-03-30');
+});
+
+test('does not interpret an unknown usage response as daily history', () => {
+  assert.equal(normalizeDailyEnergyHistory({ today: 1.25, history: [] }).ok, false);
+  assert.equal(normalizeDailyEnergyHistory({
+    energy_data: { data: ['12'], end_timestamp: 1795726800, interval: 1440 }
+  }).ok, false);
 });
