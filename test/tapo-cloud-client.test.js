@@ -542,6 +542,51 @@ test('performs a second read-only usage request from the quarter boundary', asyn
 });
 
 
+
+test('compares monthly Tapo energy only when every day from month start is present', async () => {
+  const values = Array.from({ length: 27 }, (_, index) => 100 + index);
+  values[26] = 296;
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Europe/Moscow' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage() {
+        return {
+          energy_data: {
+            data: values,
+            start_timestamp: 1793480400,
+            end_timestamp: 1795813200,
+            local_time: '2026-11-27 00:55:00',
+            interval: 1440
+          }
+        };
+      },
+      async getEnergyUsage() {
+        return {
+          today_energy: 296,
+          month_energy: 3221,
+          today_runtime: 0,
+          month_runtime: 17,
+          current_power: 12500,
+          local_time: '2026-11-27 00:55:00'
+        };
+      }
+    })
+  });
+
+  const crosscheck = result.diagnostics.find(item => item.stage === 'usage_crosscheck');
+  assert.match(crosscheck.reason, /month_energy=3221 Wh; сумма дневных записей=3221 Wh; разница=0 Wh/);
+});
+
 test('keeps Tapo daily Wh history separate from runtime and cross-check summary fields', async () => {
   const result = await probeTapoThingCloud({
     username: 'user@example.com',
