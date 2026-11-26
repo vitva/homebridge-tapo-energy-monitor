@@ -24,7 +24,7 @@ function diagnostic(diagnostics, stage, status, startedAt, details = {}) {
   if (Number.isInteger(details.count)) entry.count = details.count;
   if (typeof details.errorCode === 'string') entry.errorCode = details.errorCode;
   if (Number.isInteger(details.httpStatus)) entry.httpStatus = details.httpStatus;
-  if (typeof details.reason === 'string') entry.reason = details.reason.slice(0, 180);
+  if (typeof details.reason === 'string') entry.reason = details.reason.slice(0, 500);
   if (typeof details.timeZone === 'string') entry.timeZone = details.timeZone;
   diagnostics.push(entry);
 }
@@ -199,11 +199,25 @@ async function probeReadOnlyCloudResources(api, item, host, diagnostics, index) 
     const started = Date.now();
     try {
       const payload = await request();
-      if (kind === 'settings' && typeof payload?.region === 'string') deviceRegion = payload.region;
+      const reportedRegion = kind === 'settings' && typeof payload?.region === 'string'
+        ? payload.region.trim().slice(0, 100)
+        : '';
+      if (reportedRegion) {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: reportedRegion }).format(0);
+          deviceRegion = reportedRegion;
+        } catch {
+          deviceRegion = null;
+        }
+      }
       diagnostic(diagnostics, stage, 'success', started, {
         count: index + 1,
         reason: kind === 'settings'
-          ? summarizeCloudResource(kind, payload) + (deviceRegion ? '; region=' + deviceRegion : '; region не найден')
+          ? summarizeCloudResource(kind, payload) + (deviceRegion
+            ? '; region=' + deviceRegion
+            : reportedRegion
+              ? '; region=' + reportedRegion + ' (невалидный часовой пояс; UTC fallback)'
+              : '; region не найден')
           : summarizeCloudResource(kind, payload)
       });
     } catch (error) {
