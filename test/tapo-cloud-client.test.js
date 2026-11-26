@@ -478,9 +478,11 @@ test('performs a second read-only usage request from the quarter boundary', asyn
       async getShadows() { return { shadows: [] }; },
       async getUsage(_id, _host, range) {
         ranges.push({ ...range });
+        const isPrimary = ranges.length === 1;
         return {
           energy_data: {
-            data: [10, 20, 30],
+            local_time: isPrimary ? '2026-11-26 23:44:26' : '2026-11-26 23:44:27',
+            data: isPrimary ? [0, 10, 20, 0, 30] : [0, 0, 10, 20, 0, 30],
             start_timestamp: range.start_timestamp,
             end_timestamp: range.end_timestamp,
             interval: 1440
@@ -495,6 +497,9 @@ test('performs a second read-only usage request from the quarter boundary', asyn
   assert.equal(ranges[1].end_timestamp, ranges[0].end_timestamp);
   const comparison = result.diagnostics.find(item => item.stage === 'usage_range_compare');
   assert.equal(comparison.status, 'success');
-  assert.match(comparison.reason, /последовательности совпадают/);
+  assert.match(comparison.reason, /лучший сдвиг=1/);
+  assert.match(comparison.reason, /2026-11-26 23:44:26/);
+  assert.match(comparison.reason, /ненулевые совпадения=3\/3/);
+  assert.match(comparison.reason, /samples=/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
