@@ -415,6 +415,43 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.records[86].date, '2026-11-22');
 });
 
+test('uses local_time after midnight to verify the last daily record date', () => {
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      local_time: '2026-11-27 00:55:00',
+      data: Array.from({ length: 91 }, () => 0),
+      start_timestamp: 1790542800,
+      end_timestamp: 1795813200,
+      interval: 1440
+    }
+  }, 'Europe/Moscow');
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.meta.localTime, '2026-11-27 00:55:00');
+  assert.equal(parsed.meta.localDate, '2026-11-27');
+  assert.equal(parsed.meta.endBoundaryDate, '2026-11-28');
+  assert.equal(parsed.meta.lastDate, '2026-11-27');
+  assert.equal(parsed.meta.lastRecordMatchesLocalDate, true);
+  assert.equal(parsed.meta.alignmentVerified, false);
+});
+
+test('flags a last-record date that disagrees with local_time', () => {
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      local_time: '2026-11-27 00:55:00',
+      data: [0, 0, 0],
+      start_timestamp: 1790542800,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  }, 'Europe/Moscow');
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.meta.localDate, '2026-11-27');
+  assert.equal(parsed.meta.lastDate, '2026-11-26');
+  assert.equal(parsed.meta.lastRecordMatchesLocalDate, false);
+});
+
 test('keeps daily date alignment correct across daylight-saving transitions', () => {
   const parsed = normalizeDailyEnergyHistory({
     energy_data: {
