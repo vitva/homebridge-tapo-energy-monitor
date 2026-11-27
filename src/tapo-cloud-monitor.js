@@ -182,6 +182,24 @@ class TapoCloudEnergyMonitor {
         monthlyRecords.length,
         sumWh(monthlyRecords).toFixed(2),
         invalidFromDate || 'no');
+      const savedDevice = store.getSummary().devices[device.id];
+      const savedDaily = savedDevice?.totals?.daily || {};
+      const savedMonthly = savedDevice?.totals?.monthly || {};
+      const savedYearly = savedDevice?.totals?.yearly || {};
+      const savedMonthKey = typeof savedDevice?.latestDate === 'string'
+        ? savedDevice.latestDate.slice(0, 7)
+        : null;
+      const savedYearKey = savedMonthKey ? savedMonthKey.slice(0, 4) : null;
+      this.log.info('[TAPO CLOUD STORED] %s | energyWh=%s; dailyBuckets=%s; monthlyBuckets=%s; latestDate=%s; month[%s]=%s Wh; year[%s]=%s Wh.',
+        device.name,
+        Number(savedDevice?.energyWh || 0).toFixed(2),
+        Object.keys(savedDaily).length,
+        Object.keys(savedMonthly).length,
+        savedDevice?.latestDate || '—',
+        savedMonthKey || '—',
+        Number(savedMonthKey ? savedMonthly[savedMonthKey] || 0 : 0).toFixed(2),
+        savedYearKey || '—',
+        Number(savedYearKey ? savedYearly[savedYearKey] || 0 : 0).toFixed(2));
     }
     const summary = store.getSummary();
     const region = this.devices.length
