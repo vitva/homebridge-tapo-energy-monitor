@@ -469,14 +469,13 @@ test('keeps daily date alignment correct across daylight-saving transitions', ()
 test('builds a timezone-aware January-to-January monthly energy range', () => {
   const range = buildYearlyUsageRange('Europe/Moscow', Date.UTC(2026, 5, 15, 12));
   assert.equal(range.interval, 43200);
-  const start = new Intl.DateTimeFormat('en-CA', {
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date(range.start_timestamp * 1000));
-  const end = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(new Date(range.end_timestamp * 1000));
-  assert.equal(start, '01/01/2026');
-  assert.equal(end, '01/01/2027');
+  });
+  const dateParts = timestamp => Object.fromEntries(formatter.formatToParts(new Date(timestamp * 1000))
+    .filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  assert.deepEqual(dateParts(range.start_timestamp), { month: '01', day: '01', year: '2026' });
+  assert.deepEqual(dateParts(range.end_timestamp), { month: '01', day: '01', year: '2027' });
 });
 
 test('normalizes Tapo monthly history values to Wh by calendar month', () => {
