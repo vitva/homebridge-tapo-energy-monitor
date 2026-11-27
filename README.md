@@ -16,7 +16,7 @@ The current cloud polling implementation supports **P110M only**. S112 and S110E
 
 ## Cloud account and security
 
-Configure the Tapo email and password in the plugin settings. Homebridge stores the password in plain text in `config.json`; protect that file and its backups. MFA codes are entered only when TP-Link requests them and are never saved. Session tokens are held in memory and refreshed/re-authenticated as needed; they are not written to logs or history files.
+Configure the Tapo email and password in the plugin settings. Homebridge stores the password in plain text in `config.json`; protect that file and its backups. MFA codes are entered only when TP-Link requests them and are never saved. A stable, non-secret terminal UUID is stored in Homebridge storage so the UI MFA check and background polling identify the same Tapo client across restarts. Session tokens are held in memory and refreshed/re-authenticated as needed; they are not written to logs or history files.
 
 The cloud API is unofficial/reverse-engineered and may change if TP-Link changes its private endpoints. The plugin performs read-only cloud requests and does not send relay, power, reboot, reset or configuration commands. It does not fall back to local-IP polling.
 
