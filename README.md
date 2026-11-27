@@ -5,7 +5,7 @@ Homebridge 2 plugin for collecting Tapo energy history through the TP-Link cloud
 ## Current implementation
 
 - **P110M cloud history:** Node.js account authentication, Thing Cloud discovery and read-only daily `/usage` requests.
-- **Energy units:** Tapo daily history values are Wh. The plugin stores per-device daily values and calculates month/year totals from those daily records.
+- **Energy units:** Tapo daily history values are Wh. The plugin stores per-device daily values and reads the separate January-to-January monthly history for authoritative month/year totals.
 - **Idempotent updates:** polling the same date again replaces that day's value; it never adds the same cloud record twice.
 - **Date safety:** daily requests are quarter-aligned in the device timezone. A response is imported only when the final bucket date matches Tapo's reported local date.
 - **Persistence:** history is stored in `tapo-energy-history.json` in the Homebridge storage directory.
@@ -25,7 +25,7 @@ The cloud API is unofficial/reverse-engineered and may change if TP-Link changes
 The Homebridge UI shows:
 - current combined power when a live power sample is available;
 - today's energy using the device's local calendar date;
-- per-device history totals;
+- per-device daily history totals and authoritative monthly/yearly totals;
 - combined daily, monthly and yearly Wh/kWh totals.
 
 If cloud date alignment cannot be verified, that response is skipped rather than inserted under a guessed date. Missing/offline periods are not filled with invented values.
