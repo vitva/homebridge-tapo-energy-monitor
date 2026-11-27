@@ -85,7 +85,7 @@ class EnergyStore {
     let accepted = 0;
     for (const record of records) {
       if (!record || typeof record.date !== 'string' ||
-          !/^\\d{4}-\\d{2}-\\d{2}$/.test(record.date) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(record.date) ||
           !Number.isFinite(record.value) || record.value < 0) continue;
       energyByDay[record.date] = record.value;
       accepted += 1;
@@ -94,7 +94,7 @@ class EnergyStore {
     const totals = emptyTotals();
     let energyWh = 0;
     for (const [date, value] of Object.entries(energyByDay)) {
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
       const [year, month] = date.split('-');
       totals.daily[date] = value;
       const monthKey = year + '-' + month;
@@ -124,7 +124,7 @@ class EnergyStore {
       const daily = device.energyByDay && Object.keys(device.energyByDay).length
         ? device.energyByDay : (device.totals && device.totals.daily) || {};
       for (const [date, value] of Object.entries(daily)) {
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
         const [year, month] = date.split('-');
         totals.daily[date] = (totals.daily[date] || 0) + value;
         const monthKey = year + '-' + month;
