@@ -58,7 +58,7 @@ test('publishes active watts and cumulative Wh including inactive device history
   ]);
 });
 
-test('creates a distinct cloud Matter meter with no fabricated live power', () => {
+test('creates a distinct cloud Electrical Meter with required power cluster and no fabricated live reading', () => {
   const { api } = mockApi();
   const accessory = createCloudEnergyMeterAccessory(api);
   assert.equal(accessory.UUID, 'uuid:tapo-energy-cloud-total');
@@ -66,7 +66,7 @@ test('creates a distinct cloud Matter meter with no fabricated live power', () =
   assert.equal(accessory.deviceType, 'ElectricalMeterType');
   assert.equal(accessory.context.measurementSource, 'tapo_cloud');
   assert.equal(accessory.context.testBuild, true);
-  assert.equal('electricalPowerMeasurement' in accessory.clusters, false);
+  assert.deepEqual(accessory.clusters.electricalPowerMeasurement, { activePower: null });
   assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported, { energy: 0 });
   assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, { energy: 0 });
 });

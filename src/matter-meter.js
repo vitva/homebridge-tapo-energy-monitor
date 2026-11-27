@@ -70,11 +70,12 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     model: 'P110M cloud energy history (test)',
     serialNumber: 'TAPO-ENERGY-CLOUD-TEST',
     context: { meterId: CLOUD_METER_ID, measurementSource: 'tapo_cloud', testBuild: true },
-    // Cloud history has no trustworthy live-power sample. Do not declare a
-    // power-measurement cluster with a permanent null value: expose energy only.
-    // Declaring both imported-energy attributes enables both Matter features at
-    // registration time; features cannot be added by a later state update.
+    // ElectricalMeter requires both power and energy measurement clusters.
+    // Tapo Cloud does not provide a trustworthy live-power sample, so null is
+    // the Matter-defined "no reading available" value, not a fabricated zero.
+    // Keep both imported-energy features declared at registration time.
     clusters: {
+      electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: {
         cumulativeEnergyImported: { energy: 0 },
         periodicEnergyImported: { energy: 0 }
