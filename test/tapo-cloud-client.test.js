@@ -357,7 +357,7 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   const usageFormat = result.diagnostics.find(item => item.stage === 'usage_format');
   assert.match(usageFormat.reason, /start=/);
   assert.match(usageFormat.reason, /end=/);
-  assert.match(usageFormat.reason, /запрошено точек=61/);
+  assert.match(usageFormat.reason, /запрошено точек=58/);
   assert.match(usageFormat.reason, /получено=91/);
   assert.ok(usageFormat.reason.length > 100);
 });
@@ -600,7 +600,7 @@ test('calculates the current quarter start in the device timezone', () => {
   assert.equal(buildQuarterStartTimestamp('Europe/Helsinki', end), 1790802000);
 });
 
-test('performs a second read-only usage request from the quarter boundary', async () => {
+test('uses quarter-aligned daily history as primary and compares a rolling 60-day request', async () => {
   const ranges = [];
   const result = await probeTapoThingCloud({
     username: 'user@example.com',
@@ -632,7 +632,8 @@ test('performs a second read-only usage request from the quarter boundary', asyn
   });
   assert.equal(result.ok, true);
   assert.equal(ranges.length, 2);
-  assert.equal(ranges[1].start_timestamp, buildQuarterStartTimestamp('Europe/Moscow', ranges[0].end_timestamp));
+  assert.equal(ranges[0].start_timestamp, buildQuarterStartTimestamp('Europe/Moscow', ranges[0].end_timestamp - 1));
+  assert.equal(ranges[1].start_timestamp, buildDailyUsageRange('Europe/Moscow').start_timestamp);
   assert.equal(ranges[1].end_timestamp, ranges[0].end_timestamp);
   const comparison = result.diagnostics.find(item => item.stage === 'usage_range_compare');
   assert.equal(comparison.status, 'success');
