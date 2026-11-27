@@ -184,14 +184,23 @@ class TapoCloudEnergyMonitor {
         invalidFromDate || 'no');
     }
     const summary = store.getSummary();
-    const monthKey = Object.keys(summary.totals.monthly || {}).sort().at(-1) ||
-      new Date().toISOString().slice(0, 7);
-    this.log.info('[TAPO CLOUD DATA] combined store: %s active devices; %s daily dates; %s monthly periods; current month %s Wh; current year %s Wh.',
+    const region = this.devices.length
+      ? this.deviceInfo.get(this.devices[0].id)?.region || 'UTC'
+      : 'UTC';
+    const currentParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: region, year: 'numeric', month: '2-digit'
+    }).formatToParts(new Date()).filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]));
+    const monthKey = currentParts.year + '-' + currentParts.month;
+    this.log.info('[TAPO CLOUD DATA] combined store: %s active devices; %s daily dates; %s monthly periods; %s month %s Wh; %s year %s Wh (%s).',
       this.devices.length,
       Object.keys(summary.totals.daily || {}).length,
       Object.keys(summary.totals.monthly || {}).length,
+      monthKey,
       Number(summary.totals.monthly?.[monthKey] || 0).toFixed(2),
-      Number(summary.totals.yearly?.[monthKey.slice(0, 4)] || 0).toFixed(2));
+      currentParts.year,
+      Number(summary.totals.yearly?.[currentParts.year] || 0).toFixed(2),
+      region);
     return { deviceCount: this.devices.length, importedDevices };
   }
 }
