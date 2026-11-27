@@ -106,6 +106,11 @@ class TapoCloudEnergyMonitor {
     let importedDevices = 0;
     for (const device of this.devices) {
       const info = this.deviceInfo.get(device.id) || { region: 'UTC', host: device.host };
+      let dailyRawRecords = [];
+      let dailyKeptRecords = [];
+      let dailyAlignment = 'not_checked';
+      let invalidFromDate = null;
+      let monthlyRecords = [];
       // Read monthly first to validate the current month's daily tail.
       // Store it after daily import because recordDailyEnergy invalidates the cached month.
       let monthlyHistory = null;
@@ -128,14 +133,20 @@ class TapoCloudEnergyMonitor {
       if (!history.ok) {
         this.log.warn('Tapo daily energy history format was not recognized for %s.', device.name);
       } else if (history.meta.lastRecordMatchesLocalDate !== true) {
-        this.log.warn('Tapo history date alignment is not verified for %s; daily records were not imported.', device.name);
+        dailyAlignment = 'unverified';
+        dailyRawRecords = history.records;
+        this.log.warn('Tapo history date alignment is not verified for %s; last cloud date=%s, normalized last date=%s, returned daily records=%s; daily records were not imported.',
+          device.name, history.meta.localDate || '—', history.meta.lastDate || '—', history.records.length);
       } else {
-        const invalidFromDate = findUnverifiedDailyTailStart(
+        dailyAlignment = 'verified';
+        dailyRawRecords = history.records;
+        invalidFromDate = findUnverifiedDailyTailStart(
           history.records, monthlyHistory?.records || []
         );
         const records = invalidFromDate
           ? history.records.filter(record => record.date < invalidFromDate)
           : history.records;
+        dailyKeptRecords = records;
         store.recordDailyEnergy(device.id, records, {
           name: device.name,
           model: device.model,
@@ -151,13 +162,63 @@ class TapoCloudEnergyMonitor {
       }
 
       if (monthlyHistory) {
+        monthlyRecords = monthlyHistory.records;
         store.recordMonthlyEnergy(device.id, monthlyHistory.records, {
           name: device.name,
           model: device.model,
           timeZone: info.region
         });
       }
+      const sumWh = records => records.reduce((sum, record) => sum + record.value, 0);
+      this.log.info('[TAPO CLOUD DATA] %s | daily %s: %s/%s records, %s/%s Wh, range %s..%s; monthly %s records, %s Wh; stale from %s.',
+        device.name,
+        dailyAlignment,
+        dailyKeptRecords.length,
+        dailyRawRecords.length,
+        sumWh(dailyKeptRecords).toFixed(2),
+        sumWh(dailyRawRecords).toFixed(2),
+        dailyKeptRecords[0]?.date || '—',
+        dailyKeptRecords.at(-1)?.date || '—',
+        monthlyRecords.length,
+        sumWh(monthlyRecords).toFixed(2),
+        invalidFromDate || 'no');
+      const savedDevice = store.getSummary().devices[device.id];
+      const savedDaily = savedDevice?.totals?.daily || {};
+      const savedMonthly = savedDevice?.totals?.monthly || {};
+      const savedYearly = savedDevice?.totals?.yearly || {};
+      const savedMonthKey = typeof savedDevice?.latestDate === 'string'
+        ? savedDevice.latestDate.slice(0, 7)
+        : null;
+      const savedYearKey = savedMonthKey ? savedMonthKey.slice(0, 4) : null;
+      this.log.info('[TAPO CLOUD STORED] %s | energyWh=%s; dailyBuckets=%s; monthlyBuckets=%s; latestDate=%s; month[%s]=%s Wh; year[%s]=%s Wh.',
+        device.name,
+        Number(savedDevice?.energyWh || 0).toFixed(2),
+        Object.keys(savedDaily).length,
+        Object.keys(savedMonthly).length,
+        savedDevice?.latestDate || '—',
+        savedMonthKey || '—',
+        Number(savedMonthKey ? savedMonthly[savedMonthKey] || 0 : 0).toFixed(2),
+        savedYearKey || '—',
+        Number(savedYearKey ? savedYearly[savedYearKey] || 0 : 0).toFixed(2));
     }
+    const summary = store.getSummary();
+    const region = this.devices.length
+      ? this.deviceInfo.get(this.devices[0].id)?.region || 'UTC'
+      : 'UTC';
+    const currentParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: region, year: 'numeric', month: '2-digit'
+    }).formatToParts(new Date()).filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]));
+    const monthKey = currentParts.year + '-' + currentParts.month;
+    this.log.info('[TAPO CLOUD DATA] combined store: %s active devices; %s daily dates; %s monthly periods; %s month %s Wh; %s year %s Wh (%s).',
+      this.devices.length,
+      Object.keys(summary.totals.daily || {}).length,
+      Object.keys(summary.totals.monthly || {}).length,
+      monthKey,
+      Number(summary.totals.monthly?.[monthKey] || 0).toFixed(2),
+      currentParts.year,
+      Number(summary.totals.yearly?.[currentParts.year] || 0).toFixed(2),
+      region);
     return { deviceCount: this.devices.length, importedDevices };
   }
 }

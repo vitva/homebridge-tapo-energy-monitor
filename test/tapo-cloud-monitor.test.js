@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const util = require('node:util');
 const { EnergyStore } = require('../src/energy-store');
 const { TapoCloudEnergyMonitor } = require('../src/tapo-cloud-monitor');
 
@@ -12,7 +13,9 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tapo-cloud-monitor-'));
   const store = new EnergyStore(directory, { warn() {}, error() {} });
   const requestedRanges = [];
+  const infoMessages = [];
   const monitor = new TapoCloudEnergyMonitor({
+    log: { info(message, ...args) { infoMessages.push(util.format(message, ...args)); }, warn() {}, error() {} },
     username: 'user@example.com',
     password: 'secret',
     auth: {
@@ -78,6 +81,10 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
     assert.equal(Object.values(summary.totals.daily).reduce((sum, value) => sum + value, 0), 4000);
     assert.equal(summary.totals.monthly['2026-11'], 5000);
     assert.equal(summary.totals.yearly['2026'], 6000);
+    assert.equal(infoMessages.some(message => message.includes('[TAPO CLOUD STORED]') &&
+      message.includes('energyWh=6000.00') && message.includes('monthlyBuckets=12') &&
+      message.includes('month[2026-11]=5000.00 Wh')), true,
+    'cloud poll must log the values actually persisted for each device');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
