@@ -109,6 +109,8 @@ class EnergyStore {
       name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
       model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
       source: 'tapo_cloud',
+      timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
+      latestDate: typeof metadata.latestDate === 'string' ? metadata.latestDate : (previous.latestDate || null),
       energyByDay,
       energyWh,
       totals
