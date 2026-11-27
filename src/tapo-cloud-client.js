@@ -482,12 +482,12 @@ async function probeTapoThingCloud(options = {}) {
                 return [{
                   date: record.date,
                   primary: record.value,
-                  quarter: comparisonRecordsByDate.get(record.date)
+                  comparison: comparisonRecordsByDate.get(record.date)
                 }];
               });
               const overlapPrimarySum = overlap.reduce((sum, record) => sum + record.primary, 0);
-              const overlapComparisonSum = overlap.reduce((sum, record) => sum + record.quarter, 0);
-              const overlapMismatches = overlap.filter(record => record.primary !== record.quarter).length;
+              const overlapComparisonSum = overlap.reduce((sum, record) => sum + record.comparison, 0);
+              const overlapMismatches = overlap.filter(record => record.primary !== record.comparison).length;
               const overlapRange = overlap.length
                 ? overlap[0].date + ' — ' + overlap.at(-1).date
                 : 'нет общих дат';
@@ -500,10 +500,10 @@ async function probeTapoThingCloud(options = {}) {
                 let matches = 0;
                 let compared = 0;
                 for (let primaryIndex = 0; primaryIndex < primaryValues.length; primaryIndex += 1) {
-                  const quarterIndex = primaryIndex + offset;
-                  if (quarterIndex < 0 || quarterIndex >= comparisonValues.length) continue;
+                  const comparisonIndex = primaryIndex + offset;
+                  if (comparisonIndex < 0 || comparisonIndex >= comparisonValues.length) continue;
                   const left = primaryValues[primaryIndex];
-                  const right = comparisonValues[quarterIndex];
+                  const right = comparisonValues[comparisonIndex];
                   if (left !== 0 || right !== 0) {
                     compared += 1;
                     if (left === right) matches += 1;
@@ -528,11 +528,11 @@ async function probeTapoThingCloud(options = {}) {
                 typeof value.local_time === 'string' ? value.local_time.slice(0, 19) : '—'
               ];
               const primaryMeta = returnedMeta(primaryEnergy);
-              const quarterMeta = returnedMeta(comparisonEnergy);
+              const comparisonMeta = returnedMeta(comparisonEnergy);
               diagnostic(diagnostics, 'usage_range_compare', 'success', compareStarted, {
                 count: index + 1,
                 reason: 'Диапазоны: основной квартальный start/end/local=' + primaryMeta.join('/') +
-                  '; контрольный 60-дневный=' + quarterMeta.join('/') +
+                  '; контрольный 60-дневный=' + comparisonMeta.join('/') +
                   '; запрошено start=' + usageRange.start_timestamp + '/' + comparisonRange.start_timestamp +
                   ', end=' + usageRange.end_timestamp +
                   '; точек=' + primaryValues.length + '/' + comparisonValues.length +
