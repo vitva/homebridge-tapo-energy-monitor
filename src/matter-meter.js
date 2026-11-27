@@ -136,9 +136,9 @@ async function updateCloudEnergyMeter(api, uuid, summary, _previousReading = nul
     throw new RangeError('Matter energy timestamps must be Unix epoch seconds on or after 2000-01-01T00:00:00Z.');
   }
 
-  // Apple Home consumes periodicEnergyImported for period usage. Publish the
-  // verified Tapo daily bucket, not the difference between two cloud polls:
-  // monthly/daily cloud history often remains unchanged across 5-minute polls.
+  // Publish the verified Tapo daily bucket as periodic imported energy, not the
+  // difference between two cloud polls: cloud history often remains unchanged
+  // across 5-minute polls, which would otherwise keep the period value at zero.
   const timeZone = cloudDevices.find(device => typeof device.timeZone === 'string')?.timeZone || 'UTC';
   const dateKey = getDateKeyInTimeZone(nowMs, timeZone);
   const hasCompleteDailyReading = cloudDevices.length > 0 &&
