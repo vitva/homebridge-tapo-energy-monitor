@@ -162,17 +162,32 @@ jobs:
                   await this.registerCloudMatterMeter();
                   if (!this.cloudMatterMeterUuid) throw new Error('Cloud Matter endpoint was not registered.');
           
-                  const summary = { devices: { fixture: { source: 'tapo_cloud', active: true, energyWh: 123.456 } } };
+                  const monthKey = new Date().toISOString().slice(0, 7);
+                  const summary = {
+                    devices: {
+                      fixture: {
+                        source: 'tapo_cloud',
+                        active: true,
+                        energyWh: 123.456,
+                        timeZone: 'UTC',
+                        energyByMonth: { [monthKey]: 123.456 }
+                      }
+                    }
+                  };
                   const result = await this.publishCloudMatterReading(summary);
                   if (!result) throw new Error('Cloud Matter energy update returned no result.');
           
                   const cluster = this.api.matter.clusterNames.ElectricalEnergyMeasurement;
                   const state = await this.api.matter.getAccessoryState(this.cloudMatterMeterUuid, cluster);
                   const energy = Number(state?.cumulativeEnergyImported?.energy);
+                  const periodic = Number(state?.periodicEnergyImported?.energy);
                   if (!Number.isFinite(energy) || energy !== 123456) {
-                    throw new Error('Cloud Matter readback mismatch: ' + JSON.stringify(state));
+                    throw new Error('Cloud Matter cumulative readback mismatch: ' + JSON.stringify(state));
                   }
-                  this.log.info('[MATTER CLOUD CI] endpoint and energy readback verified: %s mWh', energy);
+                  if (!Number.isFinite(periodic) || periodic !== 123456) {
+                    throw new Error('Cloud Matter periodic readback mismatch: ' + JSON.stringify(state));
+                  }
+                  this.log.info('[MATTER CLOUD CI] endpoint and energy readback verified: cumulative %s mWh; periodic %s mWh', energy, periodic);
                 }
               });
           };
@@ -208,7 +223,7 @@ jobs:
             echo "Cloud Matter Homebridge exited unexpectedly (code $CLOUD_EXIT_CODE)." >&2
             exit 1
           fi
-          grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
+          grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: cumulative 123456 mWh; periodic 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
           if grep -q "violates device type requirements" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"; then
             echo "Cloud Matter endpoint violates device type requirements." >&2
             exit 1

@@ -82,36 +82,77 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
       electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: {
         cumulativeEnergyImported: { energy: 0, endTimestamp: timestamp },
-        periodicEnergyImported: { energy: 0, startTimestamp: Math.max(0, timestamp - 1), endTimestamp: timestamp }
+        periodicEnergyImported: {
+          energy: 0,
+          startTimestamp: Math.max(MIN_MATTER_EPOCH_SECONDS, timestamp - 1),
+          endTimestamp: timestamp
+        }
       }
     }
   };
 }
 
-async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null, nowMs = Date.now()) {
+function getDateKeyInTimeZone(timestampMs, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date(timestampMs));
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal')
+    .map(part => [part.type, part.value]));
+  return values.year + '-' + values.month + '-' + values.day;
+}
+
+function getStartOfDayTimestamp(dateKey, timeZone) {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const targetLocalAsUtc = Date.UTC(year, month - 1, day);
+  let guess = targetLocalAsUtc;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  });
+
+  // Convert local midnight to UTC without assuming the Homebridge host timezone.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(guess))
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value]));
+    const representedAsUtc = Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second)
+    );
+    const adjustment = targetLocalAsUtc - representedAsUtc;
+    if (adjustment === 0) break;
+    guess += adjustment;
+  }
+  return Math.floor(guess / 1000);
+}
+
+async function updateCloudEnergyMeter(api, uuid, summary, _previousReading = null, nowMs = Date.now()) {
   const matter = api && api.matter;
   if (!matter || !uuid || typeof matter.updateAccessoryState !== 'function') return null;
 
   const devices = Object.values((summary && summary.devices) || {});
-  const cumulativeEnergyWh = devices
-    .filter(device => device && device.source === 'tapo_cloud' &&
-      Number.isFinite(device.energyWh) && device.energyWh >= 0)
-    .reduce((total, device) => total + device.energyWh, 0);
+  const cloudDevices = devices.filter(device => device && device.source === 'tapo_cloud' &&
+    device.active !== false && Number.isFinite(device.energyWh) && device.energyWh >= 0);
+  const cumulativeEnergyWh = cloudDevices.reduce((total, device) => total + device.energyWh, 0);
 
   const timestamp = Math.floor(nowMs / 1000);
   if (timestamp < MIN_MATTER_EPOCH_SECONDS) {
     throw new RangeError('Matter energy timestamps must be Unix epoch seconds on or after 2000-01-01T00:00:00Z.');
   }
-  const hasPrevious = previousReading &&
-    Number.isFinite(previousReading.cumulativeEnergyWh) &&
-    Number.isFinite(previousReading.timestamp) &&
-    previousReading.timestamp >= MIN_MATTER_EPOCH_SECONDS;
-  const periodicEnergyWh = hasPrevious
-    ? Math.max(0, cumulativeEnergyWh - previousReading.cumulativeEnergyWh)
-    : 0;
-  const startTimestamp = hasPrevious && previousReading.timestamp < timestamp
-    ? previousReading.timestamp
-    : Math.max(MIN_MATTER_EPOCH_SECONDS, timestamp - 1);
+
+  // Publish the authoritative current-month cloud total as periodic imported
+  // energy. Daily history can be stale or incomplete, while the monthly endpoint
+  // remains the authoritative source for the current month.
+  const timeZone = cloudDevices.find(device => typeof device.timeZone === 'string')?.timeZone || 'UTC';
+  const dateKey = getDateKeyInTimeZone(nowMs, timeZone);
+  const periodKey = dateKey.slice(0, 7);
+  const periodStartDateKey = periodKey + '-01';
+  const hasCompleteMonthlyReading = cloudDevices.length > 0 &&
+    cloudDevices.every(device => Number.isFinite(device.energyByMonth?.[periodKey]) && device.energyByMonth[periodKey] >= 0);
+  const periodicEnergyWh = hasCompleteMonthlyReading
+    ? cloudDevices.reduce((total, device) => total + device.energyByMonth[periodKey], 0)
+    : null;
+  const startTimestamp = getStartOfDayTimestamp(periodStartDateKey, timeZone);
 
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
@@ -119,14 +160,14 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
       energy: Math.round(cumulativeEnergyWh * 1000),
       endTimestamp: timestamp
     },
-    periodicEnergyImported: {
+    periodicEnergyImported: periodicEnergyWh === null ? null : {
       energy: Math.round(periodicEnergyWh * 1000),
       startTimestamp,
       endTimestamp: timestamp
     }
   });
 
-  return { cumulativeEnergyWh, periodicEnergyWh, timestamp };
+  return { cumulativeEnergyWh, periodicEnergyWh, timestamp, dateKey, periodKey, timeZone };
 }
 
 module.exports = {

@@ -87,17 +87,16 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
 
   assert.deepEqual(result, {
     cumulativeEnergyWh: 730,
-    periodicEnergyWh: 0,
-    timestamp: 1800000000
+    periodicEnergyWh: null,
+    timestamp: 1800000000,
+    dateKey: '2027-01-15',
+    periodKey: '2027-01',
+    timeZone: 'UTC'
   });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
       cumulativeEnergyImported: { energy: 730000, endTimestamp: 1800000000 },
-      periodicEnergyImported: {
-        energy: 0,
-        startTimestamp: 1799999999,
-        endTimestamp: 1800000000
-      }
+      periodicEnergyImported: null
     }]
   ]);
 });
@@ -112,7 +111,7 @@ test('uses Unix epoch seconds required by the Matter.js epoch-s validator', asyn
   assert.equal(result.timestamp, 1800000000);
   assert.equal(updates[0][2].cumulativeEnergyImported.endTimestamp, 1800000000);
   assert.ok(updates[0][2].cumulativeEnergyImported.endTimestamp >= 946684800);
-  assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, 1799999999);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
 });
 
 test('rejects Matter timestamps before the supported Unix epoch minimum', async () => {
@@ -126,39 +125,82 @@ test('rejects Matter timestamps before the supported Unix epoch minimum', async 
   assert.equal(updates.length, 0);
 });
 
-test('publishes the change since the previous cloud poll as periodic imported energy', async () => {
+test('publishes the verified current-month cloud bucket as periodic imported energy', async () => {
   const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: {
-      cloudA: { source: 'tapo_cloud', energyWh: 735.25 }
-    }
-  }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
-
-  assert.deepEqual(result, {
-    cumulativeEnergyWh: 735.25,
-    periodicEnergyWh: 5.25,
-    timestamp: 1800000900
-  });
-  assert.deepEqual(updates[0], [
-    'cloud-meter-uuid',
-    'electricalEnergyMeasurement',
-    {
-      cumulativeEnergyImported: { energy: 735250, endTimestamp: 1800000900 },
-      periodicEnergyImported: {
-        energy: 5250,
-        startTimestamp: 1800000000,
-        endTimestamp: 1800000900
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 735.25, timeZone: 'UTC',
+        energyByMonth: { '2027-01': 5.25 }
+      },
+      cloudB: {
+        source: 'tapo_cloud', active: true, energyWh: 100, timeZone: 'UTC',
+        energyByMonth: { '2027-01': 2.75 }
       }
     }
-  ]);
+  }, { cumulativeEnergyWh: 700, timestamp: 1799990000 }, nowMs);
+
+  assert.deepEqual(result, {
+    cumulativeEnergyWh: 835.25,
+    periodicEnergyWh: 8,
+    timestamp: 1800000000,
+    dateKey: '2027-01-15',
+    periodKey: '2027-01',
+    timeZone: 'UTC'
+  });
+  assert.deepEqual(updates[0][2], {
+    cumulativeEnergyImported: { energy: 835250, endTimestamp: 1800000000 },
+    periodicEnergyImported: {
+      energy: 8000,
+      startTimestamp: Date.UTC(2027, 0, 1) / 1000,
+      endTimestamp: 1800000000
+    }
+  });
 });
 
-test('does not publish a negative periodic delta when cloud totals are corrected down', async () => {
+test('does not publish a fabricated monthly value when any active cloud device has no verified bucket', async () => {
+  const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 735.25, timeZone: 'UTC',
+        energyByMonth: { '2027-01': 5.25 }
+      },
+      cloudB: {
+        source: 'tapo_cloud', active: true, energyWh: 100, timeZone: 'UTC',
+        energyByMonth: {}
+      }
+    }
+  }, null, nowMs);
+
+  assert.equal(result.periodicEnergyWh, null);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
+});
+
+test('uses the device timezone when calculating the current-month period start', async () => {
+  const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 10, timeZone: 'Europe/Moscow',
+        energyByMonth: { '2027-01': 10 }
+      }
+    }
+  }, null, nowMs);
+
+  assert.equal(result.dateKey, '2027-01-15');
+  assert.equal(result.periodicEnergyWh, 10);
+  assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, Date.UTC(2026, 11, 31, 21, 0, 0) / 1000);
+});
+test('does not derive periodic usage from cumulative corrections when monthly history is unavailable', async () => {
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
-    devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
+    devices: { cloudA: { source: 'tapo_cloud', active: true, energyWh: 700, timeZone: 'UTC' } }
   }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
 
-  assert.equal(result.periodicEnergyWh, 0);
-  assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
+  assert.equal(result.periodicEnergyWh, null);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
 });
