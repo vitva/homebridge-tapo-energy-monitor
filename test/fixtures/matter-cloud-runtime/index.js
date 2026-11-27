@@ -3,7 +3,7 @@
 const { TapoEnergyMonitorPlatform } = require('homebridge-tapo-energy-monitor/src/platform');
 
 module.exports = (api) => {
-  api.registerPlatform('homebridge-tapo-energy-matter-ci', 'TapoMatterCloudFixture',
+  api.registerPlatform('homebridge-tapo-energy-monitor', 'TapoEnergyMonitor',
     class MatterCloudFixturePlatform extends TapoEnergyMonitorPlatform {
       constructor(log, config, platformApi) {
         super(log, { ...config, enableMatterMeter: true }, platformApi);
