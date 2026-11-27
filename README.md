@@ -2,8 +2,10 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
-## Beta 0.2.0-beta.20
+## Beta 0.2.0-beta.22
 
+- Hardened cloud Matter meter registration across Homebridge restarts: the endpoint is registered before any state update, transient registration failures are retried, and the previous simulation meter is removed only after cloud registration succeeds.
+- Separated Matter state-update errors from readback diagnostics so a failed diagnostic cannot mask a successful publication; readback now reports a missing endpoint/cluster explicitly.
 - Corrected daily history quality handling: trailing zero buckets that conflict with authoritative monthly totals are treated as unavailable rather than real zero consumption.
 - Unavailable daily values are shown as `—`; valid earlier daily readings are retained.
 - Archived-device daily values are limited to the actual current date instead of reusing the last historical date.
@@ -29,7 +31,7 @@ With Matter enabled and Homebridge 2.5.0 or later, cloud mode registers a separa
 
 The Matter energy value is the sum of the cloud monthly history currently imported and retained by the plugin. It is **not a verified lifetime/billing counter**. On a fresh installation, the available cloud series initially covers the current calendar year. Treat this accessory as a beta presentation test, not as a billing meter. The simulation accessory remains separate and is not mixed with cloud values. When switching from simulation to cloud mode, the previous estimated meter is unregistered where Homebridge supports that operation.
 
-Apple Home may not display every Matter Electrical Meter attribute or expose it in the Energy view. Its actual presentation must be checked on the target iOS/Home hub version; the plugin dashboard remains the source for daily, monthly and yearly history.
+The Matter meter is published through the Homebridge Matter bridge (a separate pairing from the HomeKit/HAP bridge); it is not a HomeKit accessory card in the Homebridge HAP accessory list. Apple Home may not display every Matter Electrical Meter attribute or expose it in the Energy view. Its actual presentation must be checked on the target iOS/Home hub version; the plugin dashboard remains the source for daily, monthly and yearly history.
 
 ## Tapo account and security
 

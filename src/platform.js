@@ -22,6 +22,7 @@ class TapoEnergyMonitorPlatform {
     this.matterMeterUuid = null;
     this.cloudMatterMeterUuid = null;
     this.cloudMatterLastReading = null;
+    this.cloudMatterRegistrationRetryAt = 0;
 
     api.on('didFinishLaunching', () => {
       this.start().catch(error => this.log.error('Could not start Tapo Energy Monitor: %s', error.message));
@@ -122,32 +123,12 @@ class TapoEnergyMonitorPlatform {
     const interval = Math.max(300, Math.min(3600, configuredInterval));
     const poll = async () => {
       try {
+        // Retry endpoint registration independently of cloud polling: a temporary
+        // TP-Link outage must not prevent recovery of the Matter endpoint.
+        await this.ensureCloudMatterMeterRegistration();
         const result = await this.cloudMonitor.poll(this.store);
         if (this.cloudMatterMeterUuid) {
-          try {
-            const meter = await updateCloudEnergyMeter(
-              this.api,
-              this.cloudMatterMeterUuid,
-              this.store.getSummary(),
-              this.cloudMatterLastReading
-            );
-            if (meter) {
-              this.cloudMatterLastReading = {
-                cumulativeEnergyWh: meter.cumulativeEnergyWh,
-                timestamp: meter.timestamp
-              };
-              this.log.info('[MATTER CLOUD TEST] cumulative imported: %s Wh | periodic: %s Wh',
-                meter.cumulativeEnergyWh.toFixed(2), meter.periodicEnergyWh.toFixed(2));
-              if (typeof this.api.matter.getAccessoryState === 'function') {
-                const energyCluster = this.api.matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
-                const state = await this.api.matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
-                this.log.info('[MATTER CLOUD READBACK] %s | %s',
-                  this.cloudMatterMeterUuid, JSON.stringify(state ?? null));
-              }
-            }
-          } catch (error) {
-            this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);
-          }
+          await this.publishCloudMatterReading(this.store.getSummary());
         }
         this.log.info('[TAPO CLOUD] %s P110M devices found; %s histories updated.',
           result.deviceCount, result.importedDevices);
@@ -160,37 +141,144 @@ class TapoEnergyMonitorPlatform {
     this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);
   }
 
+  async ensureCloudMatterMeterRegistration() {
+    if (this.config.enableMatterMeter === false || this.cloudMatterMeterUuid ||
+      !this.api?.matter || Date.now() < this.cloudMatterRegistrationRetryAt) {
+      return false;
+    }
+
+    await this.registerCloudMatterMeter();
+    return Boolean(this.cloudMatterMeterUuid);
+  }
+
   async registerCloudMatterMeter() {
     if (this.config.enableMatterMeter === false) return;
 
-    // Remove the previous cloud-mode prototype that reused the simulation meter identity.
-    // This prevents HomeKit from retaining a misleading "Расчётная" meter beside the real one.
     const matter = this.api && this.api.matter;
-    if (matter && typeof matter.unregisterPlatformAccessories === 'function') {
-      const previousEstimated = createEstimatedMeterAccessory(this.api, this.config.matterMeterName || 'Tapo Energy — Расчётная');
-      if (previousEstimated) {
-        try {
-          await matter.unregisterPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [previousEstimated]);
-          this.log.info('Removed the previous estimated Matter meter from cloud mode.');
-        } catch (error) {
-          this.log.warn('Could not remove the previous estimated Matter meter: %s', error.message);
-        }
-      }
-    }
-
-    const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
-    if (!accessory) {
-      this.log.warn('Cloud Matter meter not registered. Enable Matter on this Homebridge bridge and use Homebridge 2.5.0 or later for Electrical Meter support.');
+    if (!matter || typeof matter.registerPlatformAccessories !== 'function') {
+      this.log.warn('Cloud Matter meter not registered: Matter is not enabled for this Homebridge bridge. Cloud history will continue without a Matter endpoint.');
       return;
     }
 
     try {
-      await this.api.matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
+      const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
+      if (!accessory) {
+        this.cloudMatterRegistrationRetryAt = Number.MAX_SAFE_INTEGER;
+        this.log.warn('Cloud Matter meter not registered. Homebridge 2.5.0 or later with Electrical Meter support is required.');
+        return;
+      }
+
+      // Homebridge resolves this promise only after the endpoint is registered and ready
+      // for updates. Restored Matter accessories must be registered again on every start.
+      await matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
       this.cloudMatterMeterUuid = accessory.UUID;
-      this.log.info('Real Tapo cloud energy Matter meter registered: %s', accessory.displayName);
+      this.cloudMatterRegistrationRetryAt = 0;
+      this.log.info('[MATTER CLOUD REGISTERED] %s | %s', accessory.UUID, accessory.displayName);
+      await this.restoreCloudMatterLastReading();
+
+      // Do not remove the old simulation meter until the cloud endpoint is safely registered.
+      if (typeof matter.unregisterPlatformAccessories === 'function') {
+        const previousEstimated = createEstimatedMeterAccessory(this.api, this.config.matterMeterName || 'Tapo Energy — Расчётная');
+        if (previousEstimated) {
+          try {
+            await matter.unregisterPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [previousEstimated]);
+            this.log.info('Removed the previous estimated Matter meter from cloud mode.');
+          } catch (error) {
+            this.log.warn('Could not remove the previous estimated Matter meter: %s', error.message);
+          }
+        }
+      }
     } catch (error) {
-      this.log.warn('Cloud Matter meter registration failed; cloud history will continue: %s', error.message);
+      this.cloudMatterMeterUuid = null;
+      this.cloudMatterRegistrationRetryAt = Date.now() + 300000;
+      this.log.warn('Cloud Matter meter registration failed; will retry after 5 minutes. Cloud history will continue: %s', error.message);
     }
+  }
+
+  async restoreCloudMatterLastReading() {
+    const matter = this.api && this.api.matter;
+    if (!this.cloudMatterMeterUuid || typeof matter?.getAccessoryState !== 'function') return null;
+
+    try {
+      const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
+      const state = await matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
+      const imported = state?.cumulativeEnergyImported;
+      const energyMWh = Number(imported?.energy);
+      const timestamp = Number(imported?.endTimestamp);
+
+      // A freshly created endpoint starts at zero. Restore only a real, positive
+      // cached cumulative value; otherwise the first cloud poll must not fabricate
+      // a periodic interval from the entire imported history.
+      if (Number.isFinite(energyMWh) && energyMWh > 0 &&
+        Number.isFinite(timestamp) && timestamp > 0) {
+        this.cloudMatterLastReading = {
+          cumulativeEnergyWh: energyMWh / 1000,
+          timestamp
+        };
+        this.log.info('[MATTER CLOUD RESTORE] %s | cumulative %s Wh | Matter timestamp %s',
+          this.cloudMatterMeterUuid, this.cloudMatterLastReading.cumulativeEnergyWh.toFixed(3), timestamp);
+        return this.cloudMatterLastReading;
+      }
+
+      this.log.info('[MATTER CLOUD RESTORE] %s | no previous positive cumulative reading in Matter cache',
+        this.cloudMatterMeterUuid);
+      return null;
+    } catch (error) {
+      this.log.warn('[MATTER CLOUD RESTORE] %s | could not restore previous reading: %s',
+        this.cloudMatterMeterUuid, error.message);
+      return null;
+    }
+  }
+
+  async publishCloudMatterReading(summary) {
+    if (!this.cloudMatterMeterUuid) return null;
+
+    let meter;
+    try {
+      meter = await updateCloudEnergyMeter(
+        this.api,
+        this.cloudMatterMeterUuid,
+        summary,
+        this.cloudMatterLastReading
+      );
+    } catch (error) {
+      this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);
+      return null;
+    }
+
+    if (!meter) return null;
+
+    this.cloudMatterLastReading = {
+      cumulativeEnergyWh: meter.cumulativeEnergyWh,
+      timestamp: meter.timestamp
+    };
+    this.log.info('[MATTER CLOUD TEST] cumulative imported: %s Wh | periodic: %s Wh',
+      meter.cumulativeEnergyWh.toFixed(2), meter.periodicEnergyWh.toFixed(2));
+
+    // Keep readback diagnostics independent: a failed readback must not misreport
+    // a successful state update as a failed Matter publication.
+    const matter = this.api && this.api.matter;
+    if (typeof matter?.getAccessoryState === 'function') {
+      try {
+        const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
+        const state = await matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
+        if (state === undefined) {
+          this.log.warn('[MATTER CLOUD READBACK] %s | state unavailable (endpoint/cluster not found)',
+            this.cloudMatterMeterUuid);
+        } else {
+          const serialized = JSON.stringify(state, (_key, value) =>
+            typeof value === 'bigint' ? value.toString() : value);
+          this.log.info('[MATTER CLOUD READBACK] %s | %s', this.cloudMatterMeterUuid, serialized);
+        }
+      } catch (error) {
+        this.log.warn('[MATTER CLOUD READBACK] %s | readback failed: %s',
+          this.cloudMatterMeterUuid, error.message);
+      }
+    } else {
+      this.log.warn('[MATTER CLOUD READBACK] getAccessoryState is unavailable in this Homebridge Matter API.');
+    }
+
+    return meter;
   }
 
   async registerMatterMeter() {
