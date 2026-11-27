@@ -114,7 +114,10 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
 
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
-    cumulativeEnergyImported: { energy: Math.round(cumulativeEnergyWh * 1000) },
+    cumulativeEnergyImported: {
+      energy: Math.round(cumulativeEnergyWh * 1000),
+      endTimestamp: timestamp
+    },
     periodicEnergyImported: {
       energy: Math.round(periodicEnergyWh * 1000),
       startTimestamp,
