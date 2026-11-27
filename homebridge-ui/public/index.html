@@ -107,15 +107,18 @@
       const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
       // Combined cloud totals use active devices only; archived contributions
       // are displayed separately below without being added to account totals.
+      const hasDailyValue = (device, date) => Object.prototype.hasOwnProperty.call(device.totals?.daily || {}, date);
+      const todayKnown = !cloudHistory || activeDevices.every(device => hasDailyValue(device, todayKey));
       const todayWh = cloudHistory
-        ? activeDevices.reduce((sum, device) => sum + Number(device.totals?.daily?.[todayKey] || 0), 0)
+        ? (todayKnown ? activeDevices.reduce((sum, device) => sum + Number(device.totals.daily[todayKey]), 0) : null)
         : (data.totals?.daily?.[todayKey] || 0);
       const archivedDevices = devices.filter(device => device.active === false);
-      const archivedTodayWh = archivedDevices.reduce((sum, device) =>
-        sum + Number(device.totals?.daily?.[todayKey] || 0), 0);
+      const archivedTodayDevices = archivedDevices.filter(device => hasDailyValue(device, todayKey));
+      const archivedTodayWh = archivedTodayDevices.reduce((sum, device) =>
+        sum + Number(device.totals.daily[todayKey]), 0);
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
       byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
-      byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
+      byId('today').textContent = todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh';
       byId('count').textContent = activeDevices.length + ' active';
 
       const body = byId('devices');
@@ -128,7 +131,10 @@
         const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived · history retained' : 'Active';
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = device.active !== false && Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
-        const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[device.latestDate || todayKey] || 0) / 1000, 3) + ' kWh';
+        const daily = document.createElement('td'); daily.className = 'text-end';
+        const dailyKey = todayKey;
+        daily.textContent = hasDailyValue(device, dailyKey)
+          ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh' : '—';
         tr.append(name, model, status, power, total, daily); body.append(tr);
       }
 
@@ -146,7 +152,7 @@
         row('This month (' + monthKey + ')', number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh'),
         row('This year (' + yearKey + ')', number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh')
       );
-      if (archivedTodayWh > 0) periods.append(row('Of which archived today', number(archivedTodayWh / 1000, 3) + ' kWh'));
+      if (archivedTodayDevices.length > 0) periods.append(row('Of which archived today', number(archivedTodayWh / 1000, 3) + ' kWh'));
       if (archivedMonthWh > 0) periods.append(row('Of which archived this month', number(archivedMonthWh / 1000, 3) + ' kWh'));
       if (archivedYearWh > 0) periods.append(row('Of which archived this year', number(archivedYearWh / 1000, 3) + ' kWh'));
       byId('updated').textContent = 'History file updated: ' + new Date(result.updatedAt).toLocaleString();

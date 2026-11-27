@@ -7,7 +7,8 @@ const {
   buildQuarterStartTimestamp,
   buildYearlyUsageRange,
   normalizeDailyEnergyHistory,
-  normalizeMonthlyEnergyHistory
+  normalizeMonthlyEnergyHistory,
+  findUnverifiedDailyTailStart
 } = require('./tapo-cloud-client');
 
 class TapoCloudEnergyMonitor {
@@ -105,6 +106,21 @@ class TapoCloudEnergyMonitor {
     let importedDevices = 0;
     for (const device of this.devices) {
       const info = this.deviceInfo.get(device.id) || { region: 'UTC', host: device.host };
+      // Read monthly first to validate the current month's daily tail.
+      // Store it after daily import because recordDailyEnergy invalidates the cached month.
+      let monthlyHistory = null;
+      try {
+        const monthlyRange = buildYearlyUsageRange(info.region);
+        const monthlyUsage = await this.api.getUsage(device.id, info.host, monthlyRange);
+        monthlyHistory = normalizeMonthlyEnergyHistory(monthlyUsage, info.region);
+        if (!monthlyHistory.ok) {
+          this.log.warn('Tapo monthly energy history format was not recognized for %s.', device.name);
+          monthlyHistory = null;
+        }
+      } catch (error) {
+        this.log.warn('Could not read Tapo monthly energy history for %s: %s', device.name, error.message);
+      }
+
       const range = buildDailyUsageRange(info.region);
       range.start_timestamp = buildQuarterStartTimestamp(info.region, range.end_timestamp - 1);
       const usage = await this.api.getUsage(device.id, info.host, range);
@@ -114,30 +130,32 @@ class TapoCloudEnergyMonitor {
       } else if (history.meta.lastRecordMatchesLocalDate !== true) {
         this.log.warn('Tapo history date alignment is not verified for %s; daily records were not imported.', device.name);
       } else {
-        store.recordDailyEnergy(device.id, history.records, {
+        const invalidFromDate = findUnverifiedDailyTailStart(
+          history.records, monthlyHistory?.records || []
+        );
+        const records = invalidFromDate
+          ? history.records.filter(record => record.date < invalidFromDate)
+          : history.records;
+        store.recordDailyEnergy(device.id, records, {
           name: device.name,
           model: device.model,
           timeZone: info.region,
-          latestDate: history.meta.lastDate
+          latestDate: history.meta.lastDate,
+          invalidFromDate
         });
+        if (invalidFromDate) {
+          this.log.warn('Tapo daily history for %s is stale from %s: monthly Wh exceeds daily sum; trailing zero buckets were excluded.',
+            device.name, invalidFromDate);
+        }
         importedDevices += 1;
       }
 
-      try {
-        const monthlyRange = buildYearlyUsageRange(info.region);
-        const monthlyUsage = await this.api.getUsage(device.id, info.host, monthlyRange);
-        const monthlyHistory = normalizeMonthlyEnergyHistory(monthlyUsage, info.region);
-        if (monthlyHistory.ok) {
-          store.recordMonthlyEnergy(device.id, monthlyHistory.records, {
-            name: device.name,
-            model: device.model,
-            timeZone: info.region
-          });
-        } else {
-          this.log.warn('Tapo monthly energy history format was not recognized for %s.', device.name);
-        }
-      } catch (error) {
-        this.log.warn('Could not read Tapo monthly energy history for %s: %s', device.name, error.message);
+      if (monthlyHistory) {
+        store.recordMonthlyEnergy(device.id, monthlyHistory.records, {
+          name: device.name,
+          model: device.model,
+          timeZone: info.region
+        });
       }
     }
     return { deviceCount: this.devices.length, importedDevices };

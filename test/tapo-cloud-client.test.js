@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory, findUnverifiedDailyTailStart } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -647,4 +647,50 @@ test('uses quarter-aligned daily history as primary and compares a rolling 60-da
   assert.match(comparison.reason, /разница пересечения=0 Wh/);
   assert.match(comparison.reason, /различий по дням=0/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
+});
+
+
+test('marks a trailing zero tail as unverified when the monthly counter proves missing daily energy', () => {
+  const records = [
+    { date: '2026-10-30', value: 120 },
+    { date: '2026-10-31', value: 80 },
+    { date: '2026-11-01', value: 0 },
+    { date: '2026-11-02', value: 0 },
+    { date: '2026-11-03', value: 0 }
+  ];
+  const monthly = [{ month: '2026-11', value: 8500 }];
+  assert.equal(findUnverifiedDailyTailStart(records, monthly), '2026-11-01');
+});
+
+test('does not reject zero daily buckets when they agree with the monthly total', () => {
+  const records = [
+    { date: '2026-11-01', value: 1200 },
+    { date: '2026-11-02', value: 0 },
+    { date: '2026-11-03', value: 0 }
+  ];
+  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 1200 }]), null);
+});
+
+test('does not reject a daily history whose final day has a non-zero value', () => {
+  const records = [
+    { date: '2026-11-01', value: 1200 },
+    { date: '2026-11-02', value: 500 }
+  ];
+  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 5000 }]), null);
+});
+
+
+test('finds the earliest stale daily tail across all months with authoritative monthly totals', () => {
+  const records = [
+    { date: '2026-10-24', value: 3100 },
+    { date: '2026-10-25', value: 0 },
+    { date: '2026-10-26', value: 0 },
+    { date: '2026-11-01', value: 0 },
+    { date: '2026-11-02', value: 0 }
+  ];
+  const monthly = [
+    { month: '2026-10', value: 42000 },
+    { month: '2026-11', value: 8500 }
+  ];
+  assert.equal(findUnverifiedDailyTailStart(records, monthly), '2026-10-25');
 });

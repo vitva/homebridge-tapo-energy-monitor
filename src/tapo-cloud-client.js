@@ -191,6 +191,43 @@ function normalizeMonthlyEnergyHistory(payload, timeZone = 'UTC') {
   };
 }
 
+function findUnverifiedDailyTailStart(records, monthlyRecords) {
+  if (!Array.isArray(records) || !Array.isArray(monthlyRecords)) return null;
+  const monthlyByMonth = new Map(monthlyRecords
+    .filter(record => record && typeof record.month === 'string' &&
+      /^\d{4}-(?:0[1-9]|1[0-2])$/.test(record.month) &&
+      Number.isFinite(record.value) && record.value > 0)
+    .map(record => [record.month, record.value]));
+  const recordsByMonth = new Map();
+  for (const record of records) {
+    if (!record || typeof record.date !== 'string' ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(record.date) ||
+        !Number.isFinite(record.value) || record.value < 0) continue;
+    const month = record.date.slice(0, 7);
+    if (!recordsByMonth.has(month)) recordsByMonth.set(month, []);
+    recordsByMonth.get(month).push(record);
+  }
+  const invalidStarts = [];
+  for (const [month, monthRecords] of recordsByMonth) {
+    const monthlyValue = monthlyByMonth.get(month);
+    if (!Number.isFinite(monthlyValue)) continue;
+    const dailySum = monthRecords.reduce((sum, record) => sum + record.value, 0);
+    if (monthlyValue <= dailySum) continue;
+    let lastNonZero = -1;
+    for (let index = monthRecords.length - 1; index >= 0; index -= 1) {
+      if (monthRecords[index].value > 0) {
+        lastNonZero = index;
+        break;
+      }
+    }
+    const firstTrailingZero = lastNonZero + 1;
+    if (firstTrailingZero < monthRecords.length) {
+      invalidStarts.push(monthRecords[firstTrailingZero].date);
+    }
+  }
+  return invalidStarts.sort()[0] || null;
+}
+
 function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
   if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
@@ -608,4 +645,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory, findUnverifiedDailyTailStart };
