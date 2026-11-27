@@ -193,16 +193,32 @@
     }
   }
 
+  let platformAlias = 'TapoEnergyMonitor';
+
+  function findPlatformConfig(config) {
+    if (!Array.isArray(config)) return -1;
+    const index = config.findIndex(item => item && item.platform === platformAlias);
+    // getPluginConfig() is scoped to this plugin. Its schema is singular,
+    // so a sole returned block is unambiguous even if the host omits "platform".
+    return index >= 0 ? index : config.length === 1 ? 0 : -1;
+  }
+
   async function init() {
     try {
+      const schema = await homebridge.getPluginConfigSchema();
+      if (schema && typeof schema.pluginAlias === 'string' && schema.pluginAlias) {
+        platformAlias = schema.pluginAlias;
+      }
       const config = await homebridge.getPluginConfig();
-      const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
+      const index = findPlatformConfig(config);
+      const platform = index >= 0 ? config[index] : null;
       byId('tapo-email').value = platform && typeof platform.tapoCloudUsername === 'string' ? platform.tapoCloudUsername : '';
       byId('tapo-password').value = platform && typeof platform.tapoCloudPassword === 'string' ? platform.tapoCloudPassword : '';
       homebridge.showSchemaForm();
       homebridge.addEventListener('configChanged', (event) => {
         const updated = event.data || [];
-        const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
+        const currentIndex = findPlatformConfig(updated);
+        const current = currentIndex >= 0 ? updated[currentIndex] : null;
         if (current) {
           byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
           byId('tapo-password').value = typeof current.tapoCloudPassword === 'string' ? current.tapoCloudPassword : '';
@@ -279,9 +295,17 @@
     const password = byId('tapo-password').value;
     if (!username || !password) throw new Error('Укажите email и пароль аккаунта Tapo.');
 
+    const schema = await homebridge.getPluginConfigSchema();
+    if (schema && typeof schema.pluginAlias === 'string' && schema.pluginAlias) {
+      platformAlias = schema.pluginAlias;
+    }
     const config = await homebridge.getPluginConfig();
-    const index = (config || []).findIndex(item => item.platform === 'TapoEnergyMonitor');
-    if (index < 0) throw new Error('Не найдена конфигурация платформы Tapo Energy Monitor.');
+    const index = findPlatformConfig(config);
+    if (index < 0) {
+      const count = Array.isArray(config) ? config.length : 0;
+      throw new Error('Не удалось однозначно определить блок платформы Tapo Energy Monitor (alias: ' +
+        platformAlias + ', найдено блоков: ' + count + '). Конфигурация не изменена.');
+    }
 
     const updated = config.map((item, itemIndex) => itemIndex === index
       ? { ...item, tapoCloudUsername: username, tapoCloudPassword: password }
