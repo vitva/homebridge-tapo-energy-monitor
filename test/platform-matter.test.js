@@ -159,6 +159,9 @@ test('registers a separate real cloud energy meter for cloud mode', async () => 
   assert.equal(accessory.UUID, 'uuid:tapo-energy-cloud-total');
   assert.equal(accessory.displayName, 'Tapo Energy — Облако (тест)');
   assert.equal(accessory.context.measurementSource, 'tapo_cloud');
+  assert.deepEqual(accessory.clusters.electricalPowerMeasurement, { activePower: null });
+  assert.ok(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported);
+  assert.ok(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported);
   assert.equal(platform.cloudMatterMeterUuid, accessory.UUID);
   assert.equal(platform.matterMeterUuid, null);
 });
