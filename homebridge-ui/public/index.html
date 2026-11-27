@@ -20,7 +20,7 @@
     <h5 class="mt-4">Devices</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
-        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">Latest verified day</th></tr></thead>
+        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">This month</th><th class="text-end">Latest verified day</th></tr></thead>
         <tbody id="devices"></tbody>
       </table>
     </div>
@@ -154,11 +154,14 @@
         const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived · history retained' : 'Active';
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = device.active !== false && Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
+        const month = document.createElement('td'); month.className = 'text-end';
+        const deviceMonthWh = device.totals?.monthly?.[monthKey];
+        month.textContent = Number.isFinite(deviceMonthWh) ? number(deviceMonthWh / 1000, 3) + ' kWh' : '—';
         const daily = document.createElement('td'); daily.className = 'text-end';
         const dailyKey = displayedDayKey;
         daily.textContent = hasDailyValue(device, dailyKey)
           ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh · ' + dailyKey : '—';
-        tr.append(name, model, status, power, total, daily); body.append(tr);
+        tr.append(name, model, status, power, total, month, daily); body.append(tr);
       }
 
       const periods = byId('periods');
