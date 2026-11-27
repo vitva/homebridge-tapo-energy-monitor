@@ -124,7 +124,7 @@ class TapoEnergyMonitorPlatform {
     const poll = async () => {
       try {
         const result = await this.cloudMonitor.poll(this.store);
-        if (!this.cloudMatterMeterUuid && this.api.matter &&
+        if (this.config.enableMatterMeter !== false && !this.cloudMatterMeterUuid && this.api.matter &&
           Date.now() >= this.cloudMatterRegistrationRetryAt) {
           await this.registerCloudMatterMeter();
         }
@@ -153,6 +153,7 @@ class TapoEnergyMonitorPlatform {
 
     const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
     if (!accessory) {
+      this.cloudMatterRegistrationRetryAt = Number.MAX_SAFE_INTEGER;
       this.log.warn('Cloud Matter meter not registered. Homebridge 2.5.0 or later with Electrical Meter support is required.');
       return;
     }
