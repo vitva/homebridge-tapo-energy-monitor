@@ -101,13 +101,13 @@
 
       const data = result.data;
       const devices = Object.values(data.devices || {});
+      const activeDevices = devices.filter(device => device.active !== false);
+      const cloudHistory = activeDevices.some(device => device.source === 'tapo_cloud');
       const primaryCloudDevice = activeDevices.find(device => device.source === 'tapo_cloud' && device.latestDate);
       const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
       const todayWh = cloudHistory
         ? activeDevices.reduce((sum, device) => sum + Number(device.totals?.daily?.[device.latestDate] || 0), 0)
         : (data.totals?.daily?.[todayKey] || 0);
-      const activeDevices = devices.filter(device => device.active !== false);
-      const cloudHistory = activeDevices.some(device => device.source === 'tapo_cloud');
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
       byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
       byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
