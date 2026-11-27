@@ -80,20 +80,20 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
       simulated: { source: 'simulation', energyWh: 99999 },
       malformed: { source: 'tapo_cloud', energyWh: NaN }
     }
-  }, null, 2_000_000);
+  }, null, 1_800_000_000_000);
 
   assert.deepEqual(result, {
     cumulativeEnergyWh: 730,
     periodicEnergyWh: 0,
-    timestamp: 2000
+    timestamp: 853315200
   });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
       cumulativeEnergyImported: { energy: 730000 },
       periodicEnergyImported: {
         energy: 0,
-        startTimestamp: 1999,
-        endTimestamp: 2000
+        startTimestamp: 853315199,
+        endTimestamp: 853315200
       }
     }]
   ]);
@@ -106,12 +106,12 @@ test('publishes the change since the previous cloud poll as periodic imported en
     devices: {
       cloudA: { source: 'tapo_cloud', energyWh: 735.25 }
     }
-  }, { cumulativeEnergyWh: 730, timestamp: 2000 }, 2_900_000);
+  }, { cumulativeEnergyWh: 730, timestamp: 853315200 }, 1_800_000_900_000);
 
   assert.deepEqual(result, {
     cumulativeEnergyWh: 735.25,
     periodicEnergyWh: 5.25,
-    timestamp: 2900
+    timestamp: 853316100
   });
   assert.deepEqual(updates[0], [
     'cloud-meter-uuid',
@@ -120,8 +120,8 @@ test('publishes the change since the previous cloud poll as periodic imported en
       cumulativeEnergyImported: { energy: 735250 },
       periodicEnergyImported: {
         energy: 5250,
-        startTimestamp: 2000,
-        endTimestamp: 2900
+        startTimestamp: 853315200,
+        endTimestamp: 853316100
       }
     }
   ]);
@@ -131,7 +131,7 @@ test('does not publish a negative periodic delta when cloud totals are corrected
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
-  }, { cumulativeEnergyWh: 730, timestamp: 2000 }, 2_900_000);
+  }, { cumulativeEnergyWh: 730, timestamp: 853315200 }, 1_800_000_900_000);
 
   assert.equal(result.periodicEnergyWh, 0);
   assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
