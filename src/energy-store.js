@@ -93,6 +93,14 @@ class EnergyStore {
       accepted += 1;
     }
     if (!accepted) return;
+    const energyByMonth = { ...(previous.energyByMonth || {}) };
+    // The daily endpoint covers the current quarter. Its latest day lets us
+    // invalidate only that month's cached aggregate until a fresh monthly
+    // snapshot arrives; older monthly totals remain authoritative.
+    if (typeof metadata.latestDate === 'string' &&
+        /^\\d{4}-\\d{2}-\\d{2}$/.test(metadata.latestDate)) {
+      delete energyByMonth[metadata.latestDate.slice(0, 7)];
+    }
     this.state.devices[deviceId] = {
       ...previous,
       id: deviceId,
@@ -103,7 +111,7 @@ class EnergyStore {
       timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
       latestDate: typeof metadata.latestDate === 'string' ? metadata.latestDate : (previous.latestDate || null),
       energyByDay,
-      energyByMonth: previous.energyByMonth || {}
+      energyByMonth
     };
     this.rebuildCloudTotals();
     this.save();
