@@ -438,7 +438,7 @@ test('uses local_time after midnight to verify the last daily record date', () =
 test('flags a last-record date that disagrees with local_time', () => {
   const parsed = normalizeDailyEnergyHistory({
     energy_data: {
-      local_time: '2026-11-27 00:55:00',
+      local_time: '2026-11-29 00:55:00',
       data: [0, 0, 0],
       start_timestamp: 1790542800,
       end_timestamp: 1795726800,
@@ -447,7 +447,7 @@ test('flags a last-record date that disagrees with local_time', () => {
   }, 'Europe/Moscow');
 
   assert.equal(parsed.ok, true);
-  assert.equal(parsed.meta.localDate, '2026-11-27');
+  assert.equal(parsed.meta.localDate, '2026-11-29');
   assert.equal(parsed.meta.lastDate, '2026-11-26');
   assert.equal(parsed.meta.lastRecordMatchesLocalDate, false);
 });
