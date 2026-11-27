@@ -131,7 +131,8 @@ jobs:
           {
             "name": "homebridge-tapo-energy-matter-ci",
             "version": "1.0.0",
-            "main": "index.js"
+            "main": "index.js",
+            "keywords": ["homebridge-plugin"]
           }
           JSON
           cat > "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci/index.js" <<'JS'
@@ -184,7 +185,7 @@ jobs:
             },
             "platforms": [
               {
-                "platform": "TapoMatterCloudFixture",
+                "platform": "TapoEnergyMonitor",
                 "name": "Tapo Matter Cloud Fixture"
               }
             ]
