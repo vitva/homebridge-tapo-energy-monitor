@@ -437,29 +437,28 @@ async function probeTapoThingCloud(options = {}) {
               '; region=' + (deviceRegion || 'не найден; использован UTC') +
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
               '; запрошено точек=' + history.meta.requestedDays +
-              '; получено=' + history.meta.returnedDays +
-              '; сумма истории=' + sumEnergyWh(history.records.map(record => record.value)) + ' Wh' +
-              '; счётчики today/month=' +
-                ((usage?.energy_usage?.energy_usage || usage?.energy_usage || {}).today_energy_mwh ?? '—') + '/' +
-                ((usage?.energy_usage?.energy_usage || usage?.energy_usage || {}).month_energy_mwh ?? '—') + ' mWh' +
-              '; сумма текущего месяца по дням=' +
-                sumEnergyWh(history.records.filter(record =>
-                  record.date.slice(0, 7) === (history.meta.localDate || '').slice(0, 7)
-                ).map(record => record.value)) + ' Wh' +
-              '; последний дневной bucket=' + (history.records.at(-1)?.value ?? '—') + ' Wh' +
-              '; последний ненулевой день=' +
-                (history.records.filter(record => record.value > 0).at(-1)?.date || 'нет') +
-              '; нулевых bucket в конце=' +
-                history.records.slice().reverse().findIndex(record => record.value > 0) +
-              '; local_time=' + (history.meta.localTime || '—') +
-              '; local_date=' + (history.meta.localDate || '—') +
-              '; end_date=' + history.meta.endBoundaryDate +
-              '; последняя дата совпадает с local_date=' +
-                (history.meta.lastRecordMatchesLocalDate === null ? 'нет данных' :
-                  history.meta.lastRecordMatchesLocalDate ? 'да' : 'НЕТ') +
-              '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
+              '; получено=' + history.meta.returnedDays
             : history.reason
         });
+        if (history.ok) {
+          const countersStarted = Date.now();
+          const energyUsage = usage?.energy_usage?.energy_usage || usage?.energy_usage || {};
+          const month = (history.meta.localDate || history.meta.lastDate || '').slice(0, 7);
+          const monthRecords = history.records.filter(record => record.date.slice(0, 7) === month);
+          const lastRecord = history.records.at(-1);
+          const lastNonZeroIndex = history.records.slice().reverse().findIndex(record => record.value > 0);
+          const trailingZeroBuckets = lastNonZeroIndex < 0 ? history.records.length : lastNonZeroIndex;
+          const lastNonZero = history.records.filter(record => record.value > 0).at(-1);
+          diagnostic(diagnostics, 'usage_counters', 'success', countersStarted, {
+            count: index + 1,
+            reason: 'today=' + (energyUsage.today_energy_mwh ?? '—') + ' mWh' +
+              '; month=' + (energyUsage.month_energy_mwh ?? '—') + ' mWh' +
+              '; сумма месяца=' + sumEnergyWh(monthRecords.map(record => record.value)) + ' Wh (' + (month || '—') + ')' +
+              '; последний bucket=' + (lastRecord?.value ?? '—') + ' Wh' +
+              '; последний ненулевой=' + (lastNonZero ? lastNonZero.date + ':' + lastNonZero.value + ' Wh' : 'нет') +
+              '; нулей в конце=' + trailingZeroBuckets
+          });
+        }
 
         if (history.ok && deviceRegion) {
           const compareStarted = Date.now();
