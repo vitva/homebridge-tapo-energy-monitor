@@ -416,6 +416,7 @@ async function probeTapoThingCloud(options = {}) {
         deviceRegion = await probeReadOnlyCloudResources(api, item, usageHost, diagnostics, index + 1);
       }
       const usageRange = buildDailyUsageRange(deviceRegion);
+      usageRange.start_timestamp = buildQuarterStartTimestamp(deviceRegion || 'UTC', usageRange.end_timestamp - 1);
       const usageStarted = Date.now();
       try {
         const usage = await api.getUsage(String(item.device.id), usageHost, usageRange);
@@ -462,14 +463,10 @@ async function probeTapoThingCloud(options = {}) {
 
         if (history.ok && deviceRegion) {
           const compareStarted = Date.now();
-          const quarterStart = buildQuarterStartTimestamp(deviceRegion, usageRange.end_timestamp);
-          if (quarterStart < usageRange.end_timestamp && quarterStart !== usageRange.start_timestamp) {
+          const comparisonRange = buildDailyUsageRange(deviceRegion);
+          if (comparisonRange.start_timestamp !== usageRange.start_timestamp) {
             try {
-              const quarterUsage = await api.getUsage(String(item.device.id), usageHost, {
-                start_timestamp: quarterStart,
-                end_timestamp: usageRange.end_timestamp,
-                interval: 1440
-              });
+              const quarterUsage = await api.getUsage(String(item.device.id), usageHost, comparisonRange);
               const primaryEnergy = usage?.energy_data && typeof usage.energy_data === 'object'
                 ? usage.energy_data : {};
               const quarterEnergy = quarterUsage?.energy_data && typeof quarterUsage.energy_data === 'object'
@@ -536,7 +533,7 @@ async function probeTapoThingCloud(options = {}) {
                 count: index + 1,
                 reason: 'Диапазоны: start/end/local основной=' + primaryMeta.join('/') +
                   ', квартальный=' + quarterMeta.join('/') +
-                  '; запрошено start=' + usageRange.start_timestamp + '/' + quarterStart +
+                  '; запрошено start=' + usageRange.start_timestamp + '/' + comparisonRange.start_timestamp +
                   ', end=' + usageRange.end_timestamp +
                   '; точек=' + primaryValues.length + '/' + quarterValues.length +
                   '; суммы полных ответов=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(quarterValues) + ' Wh' +
@@ -556,13 +553,13 @@ async function probeTapoThingCloud(options = {}) {
                 count: index + 1,
                 errorCode: failure.errorCode,
                 httpStatus: failure.httpStatus,
-                reason: 'Не удалось выполнить дополнительный read-only запрос от начала квартала: ' + failure.reason
+                reason: 'Не удалось выполнить дополнительный read-only запрос контрольного диапазона 60 дней: ' + failure.reason
               });
             }
           } else {
             diagnostic(diagnostics, 'usage_range_compare', 'skipped', compareStarted, {
               count: index + 1,
-              reason: 'Квартальная граница совпала с основным диапазоном или не попала в него.'
+              reason: 'Контрольный 60-дневный диапазон совпал с основным квартальным диапазоном.'
             });
           }
         }
