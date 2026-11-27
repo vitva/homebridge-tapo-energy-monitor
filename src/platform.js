@@ -125,10 +125,7 @@ class TapoEnergyMonitorPlatform {
       try {
         // Retry endpoint registration independently of cloud polling: a temporary
         // TP-Link outage must not prevent recovery of the Matter endpoint.
-        if (this.config.enableMatterMeter !== false && !this.cloudMatterMeterUuid && this.api.matter &&
-          Date.now() >= this.cloudMatterRegistrationRetryAt) {
-          await this.registerCloudMatterMeter();
-        }
+        await this.ensureCloudMatterMeterRegistration();
         const result = await this.cloudMonitor.poll(this.store);
         if (this.cloudMatterMeterUuid) {
           await this.publishCloudMatterReading(this.store.getSummary());
@@ -142,6 +139,16 @@ class TapoEnergyMonitorPlatform {
     await poll();
     this.timer = setInterval(poll, interval * 1000);
     this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);
+  }
+
+  async ensureCloudMatterMeterRegistration() {
+    if (this.config.enableMatterMeter === false || this.cloudMatterMeterUuid ||
+      !this.api?.matter || Date.now() < this.cloudMatterRegistrationRetryAt) {
+      return false;
+    }
+
+    await this.registerCloudMatterMeter();
+    return Boolean(this.cloudMatterMeterUuid);
   }
 
   async registerCloudMatterMeter() {
