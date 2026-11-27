@@ -465,6 +465,24 @@ async function probeTapoThingCloud(options = {}) {
                 ? quarterUsage.energy_data : {};
               const primaryValues = Array.isArray(primaryEnergy.data) ? primaryEnergy.data : [];
               const quarterValues = Array.isArray(quarterEnergy.data) ? quarterEnergy.data : [];
+              const quarterHistory = normalizeDailyEnergyHistory(quarterUsage, deviceRegion);
+              const quarterRecordsByDate = new Map(quarterHistory.ok
+                ? quarterHistory.records.map(record => [record.date, record.value])
+                : []);
+              const overlap = history.records.flatMap(record => {
+                if (!quarterRecordsByDate.has(record.date)) return [];
+                return [{
+                  date: record.date,
+                  primary: record.value,
+                  quarter: quarterRecordsByDate.get(record.date)
+                }];
+              });
+              const overlapPrimarySum = overlap.reduce((sum, record) => sum + record.primary, 0);
+              const overlapQuarterSum = overlap.reduce((sum, record) => sum + record.quarter, 0);
+              const overlapMismatches = overlap.filter(record => record.primary !== record.quarter).length;
+              const overlapRange = overlap.length
+                ? overlap[0].date + ' — ' + overlap.at(-1).date
+                : 'нет общих дат';
               const sameCount = primaryValues.length === quarterValues.length;
               const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === quarterValues[valueIndex]);
               let bestOffset = 0;
@@ -510,9 +528,12 @@ async function probeTapoThingCloud(options = {}) {
                   '; запрошено start=' + usageRange.start_timestamp + '/' + quarterStart +
                   ', end=' + usageRange.end_timestamp +
                   '; точек=' + primaryValues.length + '/' + quarterValues.length +
-                  '; суммы=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(quarterValues) + ' Wh' +
-                  '; разница=' + (sumEnergyWh(quarterValues) - sumEnergyWh(primaryValues)) + ' Wh' +
-                  '; совпадение=' + (sameSequence ? 'полное' : 'нет') +
+                  '; суммы полных ответов=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(quarterValues) + ' Wh' +
+                  '; пересечение дат=' + overlapRange + ' (' + overlap.length + ')' +
+                  '; суммы пересечения=' + overlapPrimarySum + '/' + overlapQuarterSum + ' Wh' +
+                  '; разница пересечения=' + (overlapQuarterSum - overlapPrimarySum) + ' Wh' +
+                  '; различий по дням=' + overlapMismatches +
+                  '; совпадение массивов=' + (sameSequence ? 'полное' : 'нет') +
                   '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
                   Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
                   '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(quarterSample) +
