@@ -4,6 +4,8 @@ const PLUGIN_IDENTIFIER = 'homebridge-tapo-energy-monitor';
 const PLATFORM_NAME = 'TapoEnergyMonitor';
 const METER_ID = 'tapo-energy-estimated-total';
 const CLOUD_METER_ID = 'tapo-energy-cloud-total';
+// Matter epoch-s is seconds since 2000-01-01T00:00:00Z, not Unix epoch.
+const MATTER_EPOCH_UNIX_OFFSET_SECONDS = 946684800;
 
 function createEstimatedMeterAccessory(api, displayName = 'Tapo Energy — Расчётная') {
   const matter = api && api.matter;
@@ -94,7 +96,10 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
       Number.isFinite(device.energyWh) && device.energyWh >= 0)
     .reduce((total, device) => total + device.energyWh, 0);
 
-  const timestamp = Math.floor(nowMs / 1000);
+  const timestamp = Math.floor(nowMs / 1000) - MATTER_EPOCH_UNIX_OFFSET_SECONDS;
+  if (timestamp < 0) {
+    throw new RangeError('Matter energy timestamps cannot be earlier than 2000-01-01T00:00:00Z.');
+  }
   const hasPrevious = previousReading &&
     Number.isFinite(previousReading.cumulativeEnergyWh) &&
     Number.isFinite(previousReading.timestamp);
