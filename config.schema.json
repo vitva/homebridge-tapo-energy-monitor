@@ -18,11 +18,24 @@
         "default": false,
         "description": "Enable only to run an explicit simulation. Leave off to collect real P110M daily history from Tapo Cloud using the saved account credentials."
       },
+      "enableLocalPower": {
+        "title": "Read live power over local LAN",
+        "type": "boolean",
+        "default": true,
+        "description": "Read current P110M power from private LAN addresses returned by Tapo Cloud. Homebridge must be able to reach the plugs. Disable to keep cloud history only."
+      },
+      "localPowerPollingIntervalSeconds": {
+        "title": "Local power polling interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 120
+      },
       "enableMatterMeter": {
         "title": "Publish Matter Electrical Meter",
         "type": "boolean",
         "default": true,
-        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. In cloud mode publishes a separate test Electrical Meter with real imported P110M energy (Wh converted to mWh). Current power is omitted because verified live W samples are not yet available. In simulation mode publishes the separate estimated meter."
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. In cloud mode publishes imported P110M energy and live power when local LAN readings are available. In simulation mode publishes the separate estimated meter."
       },
       "matterMeterName": {
         "title": "Matter meter name",

@@ -34,7 +34,7 @@ test('reads live P110M watts over LAN and stores them without estimating energy'
       devices: new Map(),
       async connect(ip, options) {
         connected.push({ ip, options });
-        const device = { model: 'P110M', async getCurrentPower() { return { currentPower: 86.4 }; } };
+        const device = { model: 'P110M', async getEnergyUsage() { return { currentPower: 86400 }; } };
         this.devices.set(options.name, device);
         return device;
       }
@@ -102,7 +102,7 @@ test('ignores a local endpoint that identifies as a different model', async () =
       log: { info() {}, warn() {} },
       clientFactory: () => ({
         devices: new Map(),
-        async connect() { return { model: 'P110', async getCurrentPower() { return { currentPower: 50 }; } }; }
+        async connect() { return { model: 'P110', async getEnergyUsage() { return { currentPower: 50000 }; } }; }
       })
     });
     const result = await monitor.poll(

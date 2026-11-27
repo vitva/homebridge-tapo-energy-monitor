@@ -127,10 +127,12 @@ class TapoEnergyMonitorPlatform {
       termId: getStableTapoTermId(storageRoot)
     });
     await this.registerCloudMatterMeter();
-    try {
-      this.localPowerMonitor = new TapoLocalPowerMonitor({ username, password, log: this.log });
-    } catch (error) {
-      this.log.warn('Local Tapo power reader is unavailable; cloud energy history will continue: %s', error.message);
+    if (this.config.enableLocalPower !== false) {
+      try {
+        this.localPowerMonitor = new TapoLocalPowerMonitor({ username, password, log: this.log });
+      } catch (error) {
+        this.log.warn('Local Tapo power reader is unavailable; cloud energy history will continue: %s', error.message);
+      }
     }
     const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
     const interval = Math.max(300, Math.min(3600, configuredInterval));
@@ -182,10 +184,12 @@ class TapoEnergyMonitorPlatform {
     await poll();
     if (this.localPowerMonitor) {
       await pollLocalPower();
+      const configuredPowerInterval = Number(this.config.localPowerPollingIntervalSeconds) || 30;
+      const powerInterval = Math.max(10, Math.min(120, configuredPowerInterval));
       this.localPowerTimer = setInterval(() => {
         pollLocalPower().catch(error => this.log.warn('Local Tapo power polling failed: %s', error.message));
-      }, 30_000);
-      this.log.info('Local Tapo P110M power polling started (every 30 seconds).');
+      }, powerInterval * 1000);
+      this.log.info('Local Tapo P110M power polling started (every %s seconds).', powerInterval);
     }
     this.timer = setInterval(poll, interval * 1000);
     this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);

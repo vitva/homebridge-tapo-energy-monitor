@@ -1,6 +1,6 @@
 # homebridge-tapo-energy-monitor
 
-Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
+Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. Cloud history works remotely; optional live P110M power readings require Homebridge to reach the plugs on the local network.
 
 ## Beta 0.2.0-beta.19
 
@@ -12,6 +12,7 @@ Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud.
 ## Current beta implementation
 
 - **P110M cloud history:** Node.js account authentication, Thing Cloud discovery and read-only daily and monthly `/usage` requests.
+- **Live power experiment:** optional read-only LAN polling through `tapo-lan`; current power is sent to Matter only when every active P110M has a fresh local reading. Cloud history remains authoritative for energy totals.
 - **Daily energy:** imports verified daily Wh buckets, aligned to the device's local timezone and reported local date.
 - **Monthly/yearly energy:** uses the separate January-to-January monthly cloud series for month and year totals.
 - **Idempotent storage:** repeated polling replaces the same date/month rather than double-counting it.
@@ -24,7 +25,7 @@ The cloud collector currently supports **P110M only**. S112 and S110E are not ye
 
 ## Matter test meter
 
-With Matter enabled and Homebridge 2.5.0 or later, cloud mode registers a separate test accessory named **Tapo Energy — Облако (тест)**. It publishes imported cloud energy through Matter `ElectricalMeter` and declares the required electrical power measurement cluster. Active power is unavailable (`null`) because verified live W samples are not available; the plugin does not fabricate a zero-watt reading.
+With Matter enabled and Homebridge 2.5.0 or later, cloud mode registers a separate test accessory named **Tapo Energy — Облако (тест)**. It publishes imported cloud energy through Matter `ElectricalMeter` and declares the required electrical power measurement cluster. Active power is sent only when fresh local P110M readings are available; otherwise it remains unavailable (`null`), never a fabricated zero-watt reading.
 
 The Matter energy value is the sum of the cloud monthly history currently imported and retained by the plugin. It is **not a verified lifetime/billing counter**. On a fresh installation, the available cloud series initially covers the current calendar year. Treat this accessory as a beta presentation test, not as a billing meter. The simulation accessory remains separate and is not mixed with cloud values. When switching from simulation to cloud mode, the previous estimated meter is unregistered where Homebridge supports that operation.
 

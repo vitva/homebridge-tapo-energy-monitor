@@ -65,8 +65,10 @@ class TapoLocalPowerMonitor {
           }
           this.log.info('Local Tapo power reader connected to %s.', device.name || device.id);
         }
-        const reading = await connection.device.getCurrentPower();
-        const powerW = Number(reading?.currentPower);
+        // P110M reliably exposes current_power through get_energy_usage (mW).
+        const reading = await connection.device.getEnergyUsage();
+        const currentPowerMilliW = Number(reading?.currentPower);
+        const powerW = currentPowerMilliW / 1000;
         if (!Number.isFinite(powerW) || powerW < 0 || powerW > 5000) {
           throw new Error('Tapo local power response did not contain a valid Watt value.');
         }
