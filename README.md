@@ -2,7 +2,7 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
-## Beta 0.2.0-beta.22
+## Beta 0.2.0-beta.24
 
 - Hardened cloud Matter meter registration across Homebridge restarts: the endpoint is registered before any state update, transient registration failures are retried, and the previous simulation meter is removed only after cloud registration succeeds.
 - Separated Matter state-update errors from readback diagnostics so a failed diagnostic cannot mask a successful publication; readback now reports a missing endpoint/cluster explicitly.
@@ -10,7 +10,8 @@ Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud.
 - Unavailable daily values are shown as `—`; valid earlier daily readings are retained.
 - Archived-device daily values are limited to the actual current date instead of reusing the last historical date.
 - The Matter `ElectricalMeter` endpoint now declares both required electrical power and energy measurement clusters. Since Tapo Cloud does not provide a verified live-power sample, active power is reported as unavailable (`null`), not as a fabricated zero.
-- Corrected `periodicEnergyImported` interval timestamps to use Matter epoch seconds (seconds since 2000-01-01), as required by the Matter `ElectricalEnergyMeasurement` specification.
+- Corrected `cumulativeEnergyImported` and `periodicEnergyImported` timestamps to Unix epoch seconds, matching Matter.js validation for `epoch-s` attributes.
+- Cloud meter registration is now verified against the actual Matter energy cluster before reporting success or removing the previous estimated meter; failed endpoint initialization keeps the fallback meter available.
 
 ## Current beta implementation
 
