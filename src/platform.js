@@ -12,6 +12,26 @@ const {
   updateCloudEnergyMeter
 } = require('./matter-meter');
 
+async function waitForMatterClusterState(matter, uuid, cluster, predicate = () => true) {
+  if (typeof matter?.getAccessoryState !== 'function') return undefined;
+
+  // Homebridge's Matter API dispatches updateAccessoryState asynchronously.
+  // Its returned promise confirms event dispatch, not completion of the
+  // Matter.js endpoint transaction. Poll the actual state before diagnosing
+  // the endpoint as missing or reporting an update as unapplied.
+  const attempts = 20;
+  const intervalMs = 50;
+  let state;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    state = await matter.getAccessoryState(uuid, cluster);
+    if (state !== undefined && predicate(state)) return state;
+    if (attempt + 1 < attempts) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  }
+  return state;
+}
+
 class TapoEnergyMonitorPlatform {
   constructor(log, config, api) {
     this.log = log;
@@ -201,8 +221,13 @@ class TapoEnergyMonitorPlatform {
 
     try {
       const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
-      const state = await matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
-      const imported = state?.cumulativeEnergyImported;
+      const state = await waitForMatterClusterState(matter, this.cloudMatterMeterUuid, energyCluster);
+      if (state === undefined) {
+        this.log.warn('[MATTER CLOUD RESTORE] %s | Matter endpoint/cluster state is unavailable after registration; cached reading cannot be restored',
+          this.cloudMatterMeterUuid);
+        return null;
+      }
+      const imported = state.cumulativeEnergyImported;
       const energyMWh = Number(imported?.energy);
       const timestamp = Number(imported?.endTimestamp);
 
@@ -261,14 +286,26 @@ class TapoEnergyMonitorPlatform {
     if (typeof matter?.getAccessoryState === 'function') {
       try {
         const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
-        const state = await matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
+        const expectedEnergyMWh = Math.round(meter.cumulativeEnergyWh * 1000);
+        const state = await waitForMatterClusterState(
+          matter,
+          this.cloudMatterMeterUuid,
+          energyCluster,
+          value => Number(value?.cumulativeEnergyImported?.energy) === expectedEnergyMWh
+        );
         if (state === undefined) {
-          this.log.warn('[MATTER CLOUD READBACK] %s | state unavailable (endpoint/cluster not found)',
+          this.log.warn('[MATTER CLOUD READBACK] %s | no readable energy cluster state after waiting for Matter update dispatch',
             this.cloudMatterMeterUuid);
         } else {
+          const actualEnergyMWh = Number(state.cumulativeEnergyImported?.energy);
           const serialized = JSON.stringify(state, (_key, value) =>
             typeof value === 'bigint' ? value.toString() : value);
-          this.log.info('[MATTER CLOUD READBACK] %s | %s', this.cloudMatterMeterUuid, serialized);
+          if (actualEnergyMWh !== expectedEnergyMWh) {
+            this.log.warn('[MATTER CLOUD READBACK] %s | state did not converge: expected %s mWh, got %s | %s',
+              this.cloudMatterMeterUuid, expectedEnergyMWh, actualEnergyMWh, serialized);
+          } else {
+            this.log.info('[MATTER CLOUD READBACK] %s | %s', this.cloudMatterMeterUuid, serialized);
+          }
         }
       } catch (error) {
         this.log.warn('[MATTER CLOUD READBACK] %s | readback failed: %s',

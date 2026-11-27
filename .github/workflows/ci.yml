@@ -123,6 +123,95 @@ jobs:
           fi
           grep -q "Matter virtual energy sensor registered" "$RUNNER_TEMP/homebridge-matter-runtime.log"
           grep -q "\[MATTER SIMULATION\]" "$RUNNER_TEMP/homebridge-matter-runtime.log"
+
+          # Exercise the production cloud-meter registration/update/readback path
+          # against the real Homebridge 2.5.0 Matter API, including restart recovery.
+          mkdir -p "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci"
+          cat > "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci/package.json" <<'JSON'
+          {
+            "name": "homebridge-tapo-energy-matter-ci",
+            "version": "1.0.0",
+            "main": "index.js",
+            "keywords": ["homebridge-plugin"]
+          }
+          JSON
+          cat > "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci/index.js" <<'JS'
+          'use strict';
+          
+          const { TapoEnergyMonitorPlatform } = require('homebridge-tapo-energy-monitor/src/platform');
+          
+          module.exports = (api) => {
+            api.registerPlatform('homebridge-tapo-energy-monitor', 'TapoEnergyMonitor',
+              class MatterCloudFixturePlatform extends TapoEnergyMonitorPlatform {
+                constructor(log, config, platformApi) {
+                  super(log, { ...config, enableMatterMeter: true }, platformApi);
+                  platformApi.on('didFinishLaunching', () => {
+                    this.runMatterCloudFixture().catch(error => {
+                      log.error('[MATTER CLOUD CI] integration failed: %s', error.stack || error.message);
+                    });
+                  });
+                }
+          
+                async runMatterCloudFixture() {
+                  if (!this.api.matter) throw new Error('Matter API is unavailable in the integration runtime.');
+                  await this.registerMatterMeter();
+                  await this.registerCloudMatterMeter();
+                  if (!this.cloudMatterMeterUuid) throw new Error('Cloud Matter endpoint was not registered.');
+          
+                  const summary = { devices: { fixture: { source: 'tapo_cloud', active: true, energyWh: 123.456 } } };
+                  const result = await this.publishCloudMatterReading(summary);
+                  if (!result) throw new Error('Cloud Matter energy update returned no result.');
+          
+                  const cluster = this.api.matter.clusterNames.ElectricalEnergyMeasurement;
+                  const state = await this.api.matter.getAccessoryState(this.cloudMatterMeterUuid, cluster);
+                  const energy = Number(state?.cumulativeEnergyImported?.energy);
+                  if (!Number.isFinite(energy) || energy !== 123456) {
+                    throw new Error('Cloud Matter readback mismatch: ' + JSON.stringify(state));
+                  }
+                  this.log.info('[MATTER CLOUD CI] endpoint and energy readback verified: %s mWh', energy);
+                }
+              });
+          };
+          JS
+          mkdir -p "$RUNNER_TEMP/homebridge-matter-cloud-data"
+          cat > "$RUNNER_TEMP/homebridge-matter-cloud-data/config.json" <<'JSON'
+          {
+            "bridge": {
+              "name": "Tapo Energy Cloud Matter CI",
+              "username": "CC:22:3E:E3:CE:32",
+              "port": 51928,
+              "pin": "031-45-156",
+              "matter": { "port": 5543 }
+            },
+            "platforms": [
+              {
+                "platform": "TapoEnergyMonitor",
+                "name": "Tapo Matter Cloud Fixture"
+              }
+            ]
+          }
+          JSON
+          export NODE_PATH="$RUNNER_TEMP/homebridge/node_modules"
+          for ATTEMPT in 1 2; do
+            set +e
+            timeout --kill-after=5s 25s ./node_modules/.bin/homebridge \
+              -P "$RUNNER_TEMP/homebridge-matter-fixture" \
+              -U "$RUNNER_TEMP/homebridge-matter-cloud-data" \
+              > "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log" 2>&1
+            CLOUD_EXIT_CODE=$?
+            set -e
+            cat "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"
+            if [ "$CLOUD_EXIT_CODE" -ne 124 ] && [ "$CLOUD_EXIT_CODE" -ne 137 ]; then
+              echo "Cloud Matter Homebridge exited unexpectedly (code $CLOUD_EXIT_CODE)." >&2
+              exit 1
+            fi
+            grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"
+            if grep -q "violates device type requirements" "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"; then
+              echo "Cloud Matter endpoint violates device type requirements." >&2
+              exit 1
+            fi
+          done
+
       - if: matrix.node-version == 26
         run: mkdir -p artifacts && npm pack --pack-destination artifacts
       - if: matrix.node-version == 26
