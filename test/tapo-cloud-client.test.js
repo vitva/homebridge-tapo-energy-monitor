@@ -359,6 +359,7 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   assert.match(usageFormat.reason, /end=/);
   assert.match(usageFormat.reason, /запрошено точек=61/);
   assert.match(usageFormat.reason, /получено=91/);
+  assert.match(usageFormat.reason, /сумма истории=4095 Wh/);
   assert.ok(usageFormat.reason.length > 180);
 });
 
@@ -597,5 +598,7 @@ test('performs a second read-only usage request from the quarter boundary', asyn
   assert.match(comparison.reason, /2026-11-26 23:44:26/);
   assert.match(comparison.reason, /ненулевые совпадения=3\/3/);
   assert.match(comparison.reason, /samples=/);
+  assert.match(comparison.reason, /суммы=60\/60 Wh/);
+  assert.match(comparison.reason, /разница=0 Wh/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
