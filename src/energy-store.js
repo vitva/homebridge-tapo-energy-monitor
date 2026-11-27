@@ -85,6 +85,26 @@ class EnergyStore {
     this.save();
   }
 
+  updatePower(deviceId, powerW, timestamp = Date.now(), metadata = {}) {
+    if (typeof deviceId !== 'string' || !deviceId.trim() || !Number.isFinite(powerW) || powerW < 0 || !Number.isFinite(timestamp)) return;
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals() };
+    this.state.devices[deviceId] = {
+      ...previous, id: deviceId, active: previous.active !== false,
+      name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
+      model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
+      powerW, powerUpdatedAt: timestamp, powerSource: 'tapo_lan',
+      energyWh: Number.isFinite(previous.energyWh) ? previous.energyWh : 0,
+      totals: previous.totals || emptyTotals()
+    };
+  }
+
+  clearPower(deviceId) {
+    if (typeof deviceId !== 'string' || !deviceId.trim()) return;
+    const previous = this.state.devices[deviceId];
+    if (!previous || (previous.powerW === null && previous.powerUpdatedAt === null)) return;
+    this.state.devices[deviceId] = { ...previous, powerW: null, powerUpdatedAt: null, powerSource: null };
+  }
+
   recordDailyEnergy(deviceId, records, metadata = {}) {
     if (typeof deviceId !== 'string' || !deviceId.trim() || !Array.isArray(records)) return;
     const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {}, energyByMonth: {} };

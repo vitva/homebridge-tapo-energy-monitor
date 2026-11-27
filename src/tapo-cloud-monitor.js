@@ -73,25 +73,35 @@ class TapoCloudEnergyMonitor {
         id: thing.thingName || thing.deviceId || null,
         name: thing.nickname || thing.alias || model || 'Без имени',
         model,
-        host: validateThingHost(thing.appServerUrlV2 || thing.appServerUrl || this.api.host)
+        host: validateThingHost(thing.appServerUrlV2 || thing.appServerUrl || this.api.host),
+        ip: typeof thing.ip === 'string' ? thing.ip.trim() : null
       };
     }).filter(device => device.id && /P110M/i.test(device.model));
 
     for (const device of this.devices) {
-      if (this.deviceInfo.has(device.id)) continue;
-      let region = null;
+      const previous = this.deviceInfo.get(device.id) || {};
+      let region = previous.region || null;
+      let ip = typeof device.ip === 'string' ? device.ip.trim() : '';
       try {
-        const settings = await this.api.getThingResource(device.id, 'settings', device.host);
-        if (typeof settings?.region === 'string') {
-          try {
-            new Intl.DateTimeFormat('en-US', { timeZone: settings.region }).format(0);
-            region = settings.region;
-          } catch { /* use UTC when device timezone is unavailable */ }
-        }
-      } catch (error) {
-        this.log.warn('Could not read Tapo device timezone for %s: %s', device.name, error.message);
+        const details = await this.api.getThingResource(device.id, 'details', device.host);
+        if (typeof details?.ip === 'string' && details.ip.trim()) ip = details.ip.trim();
+      } catch {
+        // Cloud history remains usable when device details are temporarily unavailable.
       }
-      this.deviceInfo.set(device.id, { region: region || 'UTC', host: device.host });
+      if (!region) {
+        try {
+          const settings = await this.api.getThingResource(device.id, 'settings', device.host);
+          if (typeof settings?.region === 'string') {
+            try {
+              new Intl.DateTimeFormat('en-US', { timeZone: settings.region }).format(0);
+              region = settings.region;
+            } catch { /* use UTC when device timezone is unavailable */ }
+          }
+        } catch (error) {
+          this.log.warn('Could not read Tapo device timezone for %s: %s', device.name, error.message);
+        }
+      }
+      this.deviceInfo.set(device.id, { region: region || 'UTC', host: device.host, ip: ip || previous.ip || null });
     }
   }
 

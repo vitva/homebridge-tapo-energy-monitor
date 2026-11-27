@@ -84,6 +84,23 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
   };
 }
 
+async function updateCloudPowerMeter(api, uuid, summary, nowMs = Date.now()) {
+  const matter = api && api.matter;
+  if (!matter || !uuid || typeof matter.updateAccessoryState !== 'function') return null;
+  const devices = Object.values((summary && summary.devices) || {})
+    .filter(device => device && device.source === 'tapo_cloud' && device.active !== false);
+  const allReadingsFresh = devices.length > 0 && devices.every(device =>
+    Number.isFinite(device.powerW) && Number.isFinite(device.powerUpdatedAt) &&
+    nowMs >= device.powerUpdatedAt && nowMs - device.powerUpdatedAt <= 90_000
+  );
+  const activePowerW = allReadingsFresh ? devices.reduce((total, device) => total + device.powerW, 0) : null;
+  const powerCluster = matter.clusterNames?.ElectricalPowerMeasurement || 'electricalPowerMeasurement';
+  await matter.updateAccessoryState(uuid, powerCluster, {
+    activePower: activePowerW === null ? null : Math.round(activePowerW * 1000)
+  });
+  return { activePowerW };
+}
+
 async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null, nowMs = Date.now()) {
   const matter = api && api.matter;
   if (!matter || !uuid || typeof matter.updateAccessoryState !== 'function') return null;
@@ -124,5 +141,6 @@ module.exports = {
   createEstimatedMeterAccessory,
   updateEstimatedMeter,
   createCloudEnergyMeterAccessory,
-  updateCloudEnergyMeter
+  updateCloudEnergyMeter,
+  updateCloudPowerMeter
 };
