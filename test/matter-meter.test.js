@@ -41,7 +41,7 @@ test('does not create a Matter accessory when Matter is unavailable', () => {
   assert.equal(createEstimatedMeterAccessory({}), null);
 });
 
-test('publishes active watts and lifetime estimated Wh in Matter units', async () => {
+test('publishes active watts and cumulative Wh including inactive device history in Matter units', async () => {
   const { api, updates } = mockApi();
   const result = await updateEstimatedMeter(api, 'meter-uuid', {
     devices: {
@@ -51,9 +51,9 @@ test('publishes active watts and lifetime estimated Wh in Matter units', async (
     }
   });
 
-  assert.deepEqual(result, { activePowerW: 200, cumulativeEnergyWh: 700 });
+  assert.deepEqual(result, { activePowerW: 200, cumulativeEnergyWh: 800 });
   assert.deepEqual(updates, [
     ['meter-uuid', 'electricalPowerMeasurement', { activePower: 200000 }],
-    ['meter-uuid', 'electricalEnergyMeasurement', { cumulativeEnergyImported: { energy: 700000 } }]
+    ['meter-uuid', 'electricalEnergyMeasurement', { cumulativeEnergyImported: { energy: 800000 } }]
   ]);
 });
