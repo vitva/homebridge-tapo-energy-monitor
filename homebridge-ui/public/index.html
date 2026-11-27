@@ -134,12 +134,14 @@
       const monthKey = todayKey.slice(0, 7);
       const yearKey = todayKey.slice(0, 4);
       byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
+      const monthWh = data.totals?.monthly?.[monthKey];
+      const yearWh = data.totals?.yearly?.[yearKey];
       byId('today-label').textContent = displayedDayKey && displayedDayKey !== todayKey
         ? 'Latest verified day · combined (' + displayedDayKey + ')'
-        : 'Today · combined';
+        : displayedDayKey ? 'Today · combined' : 'No verified daily value · combined';
       byId('today').textContent = todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh';
-      byId('month').textContent = number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh';
-      byId('year').textContent = number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh';
+      byId('month').textContent = Number.isFinite(monthWh) ? number(monthWh / 1000, 3) + ' kWh' : '—';
+      byId('year').textContent = Number.isFinite(yearWh) ? number(yearWh / 1000, 3) + ' kWh' : '—';
       byId('count').textContent = activeDevices.length + ' active';
 
       const body = byId('devices');
@@ -169,9 +171,10 @@
       periods.append(
         row(displayedDayKey && displayedDayKey !== todayKey
           ? 'Latest verified day (' + displayedDayKey + ')'
-          : 'Today (' + todayKey + ')', todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh'),
-        row('This month (' + monthKey + ')', number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh'),
-        row('This year (' + yearKey + ')', number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh')
+          : displayedDayKey ? 'Today (' + todayKey + ')' : 'No verified daily value',
+        todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh'),
+        row('This month (' + monthKey + ')', Number.isFinite(monthWh) ? number(monthWh / 1000, 3) + ' kWh' : '—'),
+        row('This year (' + yearKey + ')', Number.isFinite(yearWh) ? number(yearWh / 1000, 3) + ' kWh' : '—')
       );
       if (archivedTodayDevices.length > 0) periods.append(row('Of which archived today', number(archivedTodayWh / 1000, 3) + ' kWh'));
       if (archivedMonthWh > 0) periods.append(row('Of which archived this month', number(archivedMonthWh / 1000, 3) + ' kWh'));
