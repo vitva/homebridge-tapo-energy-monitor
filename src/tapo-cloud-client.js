@@ -466,33 +466,33 @@ async function probeTapoThingCloud(options = {}) {
           const comparisonRange = buildDailyUsageRange(deviceRegion);
           if (comparisonRange.start_timestamp !== usageRange.start_timestamp) {
             try {
-              const quarterUsage = await api.getUsage(String(item.device.id), usageHost, comparisonRange);
+              const comparisonUsage = await api.getUsage(String(item.device.id), usageHost, comparisonRange);
               const primaryEnergy = usage?.energy_data && typeof usage.energy_data === 'object'
                 ? usage.energy_data : {};
-              const quarterEnergy = quarterUsage?.energy_data && typeof quarterUsage.energy_data === 'object'
-                ? quarterUsage.energy_data : {};
+              const comparisonEnergy = comparisonUsage?.energy_data && typeof comparisonUsage.energy_data === 'object'
+                ? comparisonUsage.energy_data : {};
               const primaryValues = Array.isArray(primaryEnergy.data) ? primaryEnergy.data : [];
-              const quarterValues = Array.isArray(quarterEnergy.data) ? quarterEnergy.data : [];
-              const quarterHistory = normalizeDailyEnergyHistory(quarterUsage, deviceRegion);
-              const quarterRecordsByDate = new Map(quarterHistory.ok
-                ? quarterHistory.records.map(record => [record.date, record.value])
+              const comparisonValues = Array.isArray(comparisonEnergy.data) ? comparisonEnergy.data : [];
+              const comparisonHistory = normalizeDailyEnergyHistory(comparisonUsage, deviceRegion);
+              const comparisonRecordsByDate = new Map(comparisonHistory.ok
+                ? comparisonHistory.records.map(record => [record.date, record.value])
                 : []);
               const overlap = history.records.flatMap(record => {
-                if (!quarterRecordsByDate.has(record.date)) return [];
+                if (!comparisonRecordsByDate.has(record.date)) return [];
                 return [{
                   date: record.date,
                   primary: record.value,
-                  quarter: quarterRecordsByDate.get(record.date)
+                  quarter: comparisonRecordsByDate.get(record.date)
                 }];
               });
               const overlapPrimarySum = overlap.reduce((sum, record) => sum + record.primary, 0);
-              const overlapQuarterSum = overlap.reduce((sum, record) => sum + record.quarter, 0);
+              const overlapComparisonSum = overlap.reduce((sum, record) => sum + record.quarter, 0);
               const overlapMismatches = overlap.filter(record => record.primary !== record.quarter).length;
               const overlapRange = overlap.length
                 ? overlap[0].date + ' — ' + overlap.at(-1).date
                 : 'нет общих дат';
-              const sameCount = primaryValues.length === quarterValues.length;
-              const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === quarterValues[valueIndex]);
+              const sameCount = primaryValues.length === comparisonValues.length;
+              const sameSequence = sameCount && primaryValues.every((value, valueIndex) => value === comparisonValues[valueIndex]);
               let bestOffset = 0;
               let bestNonZeroMatches = -1;
               let bestNonZeroCompared = 0;
@@ -501,9 +501,9 @@ async function probeTapoThingCloud(options = {}) {
                 let compared = 0;
                 for (let primaryIndex = 0; primaryIndex < primaryValues.length; primaryIndex += 1) {
                   const quarterIndex = primaryIndex + offset;
-                  if (quarterIndex < 0 || quarterIndex >= quarterValues.length) continue;
+                  if (quarterIndex < 0 || quarterIndex >= comparisonValues.length) continue;
                   const left = primaryValues[primaryIndex];
-                  const right = quarterValues[quarterIndex];
+                  const right = comparisonValues[quarterIndex];
                   if (left !== 0 || right !== 0) {
                     compared += 1;
                     if (left === right) matches += 1;
@@ -521,30 +521,30 @@ async function probeTapoThingCloud(options = {}) {
                 last: values.slice(-5)
               });
               const primarySample = sample(primaryValues);
-              const quarterSample = sample(quarterValues);
+              const comparisonSample = sample(comparisonValues);
               const returnedMeta = value => [
                 Number.isInteger(value.start_timestamp) ? value.start_timestamp : '—',
                 Number.isInteger(value.end_timestamp) ? value.end_timestamp : '—',
                 typeof value.local_time === 'string' ? value.local_time.slice(0, 19) : '—'
               ];
               const primaryMeta = returnedMeta(primaryEnergy);
-              const quarterMeta = returnedMeta(quarterEnergy);
+              const quarterMeta = returnedMeta(comparisonEnergy);
               diagnostic(diagnostics, 'usage_range_compare', 'success', compareStarted, {
                 count: index + 1,
-                reason: 'Диапазоны: start/end/local основной=' + primaryMeta.join('/') +
-                  ', квартальный=' + quarterMeta.join('/') +
+                reason: 'Диапазоны: основной квартальный start/end/local=' + primaryMeta.join('/') +
+                  '; контрольный 60-дневный=' + quarterMeta.join('/') +
                   '; запрошено start=' + usageRange.start_timestamp + '/' + comparisonRange.start_timestamp +
                   ', end=' + usageRange.end_timestamp +
-                  '; точек=' + primaryValues.length + '/' + quarterValues.length +
-                  '; суммы полных ответов=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(quarterValues) + ' Wh' +
+                  '; точек=' + primaryValues.length + '/' + comparisonValues.length +
+                  '; суммы полных ответов=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(comparisonValues) + ' Wh' +
                   '; пересечение дат=' + overlapRange + ' (' + overlap.length + ')' +
-                  '; суммы пересечения=' + overlapPrimarySum + '/' + overlapQuarterSum + ' Wh' +
-                  '; разница пересечения=' + (overlapQuarterSum - overlapPrimarySum) + ' Wh' +
+                  '; суммы пересечения (квартал/контроль)=' + overlapPrimarySum + '/' + overlapComparisonSum + ' Wh' +
+                  '; разница пересечения=' + (overlapComparisonSum - overlapPrimarySum) + ' Wh' +
                   '; различий по дням=' + overlapMismatches +
                   '; совпадение массивов=' + (sameSequence ? 'полное' : 'нет') +
                   '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
                   Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
-                  '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(quarterSample) +
+                  '; samples=' + JSON.stringify(primarySample) + '/' + JSON.stringify(comparisonSample) +
                   '; единицы не подтверждены.'
               });
             } catch (error) {
