@@ -104,7 +104,8 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
   }
   const hasPrevious = previousReading &&
     Number.isFinite(previousReading.cumulativeEnergyWh) &&
-    Number.isFinite(previousReading.timestamp);
+    Number.isFinite(previousReading.timestamp) &&
+    previousReading.timestamp >= MIN_MATTER_EPOCH_SECONDS;
   const periodicEnergyWh = hasPrevious
     ? Math.max(0, cumulativeEnergyWh - previousReading.cumulativeEnergyWh)
     : 0;
