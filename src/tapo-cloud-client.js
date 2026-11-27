@@ -189,7 +189,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       startTimestamp: energyData.start_timestamp ?? null,
       endTimestamp: energyData.end_timestamp,
       interval: energyData.interval,
-      alignmentVerified: false
+      alignmentVerified: Boolean(localDate && lastRecordDate === localDate)
     }
   };
 }
