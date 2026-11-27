@@ -69,7 +69,9 @@ test('creates a distinct cloud Electrical Meter with required power cluster and 
   assert.deepEqual(accessory.clusters.electricalPowerMeasurement, { activePower: null });
   assert.equal(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.energy, 0);
   assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.endTimestamp));
-  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, null);
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.energy, 0);
+  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.startTimestamp));
+  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.endTimestamp));
 });
 
 test('publishes only real cloud imported Wh as Matter mWh and excludes estimates', async () => {
