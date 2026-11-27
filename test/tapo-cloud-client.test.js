@@ -449,7 +449,7 @@ test('uses local_time after midnight to verify the last daily record date', () =
   assert.equal(parsed.meta.endBoundaryDate, '2026-11-28');
   assert.equal(parsed.meta.lastDate, '2026-11-27');
   assert.equal(parsed.meta.lastRecordMatchesLocalDate, true);
-  assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.meta.alignmentVerified, true);
 });
 
 test('flags a last-record date that disagrees with local_time', () => {
