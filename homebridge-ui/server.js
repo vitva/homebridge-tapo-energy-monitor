@@ -3,6 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { probeTapoThingCloud } = require('../src/tapo-cloud-client');
+const { TapoCloudAuth } = require('../src/tapo-cloud-auth');
+const { getStableTapoTermId } = require('../src/tapo-cloud-identity');
 const { parseWattCsv } = require('../src/watt-csv');
 
 (async () => {
@@ -79,7 +81,11 @@ const { parseWattCsv } = require('../src/watt-csv');
       if (username.length > 320 || password.length > 2048 || mfaCode.length > 32) {
         return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
       }
-      return probeTapoThingCloud({ username, password, mfaCode });
+      const storageDirectory = this.homebridgeStoragePath;
+      const auth = new TapoCloudAuth({
+        termId: storageDirectory ? getStableTapoTermId(storageDirectory) : undefined
+      });
+      return probeTapoThingCloud({ username, password, mfaCode, auth });
     }
   }
 
