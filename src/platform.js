@@ -282,7 +282,7 @@ class TapoEnergyMonitorPlatform {
       timestamp: meter.timestamp
     };
     this.log.info('[MATTER CLOUD TEST] cumulative imported: %s Wh | periodic: %s Wh',
-      meter.cumulativeEnergyWh.toFixed(2), meter.periodicEnergyWh.toFixed(2));
+      meter.cumulativeEnergyWh.toFixed(2), (meter.periodicEnergyWh === null ? 'unavailable' : meter.periodicEnergyWh.toFixed(2)));
 
     // Keep readback diagnostics independent: a failed readback must not misreport
     // a successful state update as a failed Matter publication.
