@@ -108,6 +108,9 @@ test('renders the latest common verified day and independent monthly/yearly clou
   assert.equal(elements.get('month').textContent, '12 kWh');
   assert.equal(elements.get('year').textContent, '48 kWh');
   assert.equal(elements.get('count').textContent, '4 active');
+  const firstDeviceRow = elements.get('devices').children[0];
+  assert.equal(firstDeviceRow.children[5].textContent, '3 kWh');
+  assert.equal(firstDeviceRow.children[6].textContent, '0.2 kWh · 2026-10-31');
 });
 
 test('renders monthly/yearly cloud values even when no verified daily bucket remains', async () => {
