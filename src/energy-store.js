@@ -80,28 +80,17 @@ class EnergyStore {
 
   recordDailyEnergy(deviceId, records, metadata = {}) {
     if (typeof deviceId !== 'string' || !deviceId.trim() || !Array.isArray(records)) return;
-    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {} };
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {}, energyByMonth: {} };
     const energyByDay = { ...(previous.energyByDay || {}) };
     let accepted = 0;
     for (const record of records) {
       if (!record || typeof record.date !== 'string' ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(record.date) ||
+          !/^\\d{4}-\\d{2}-\\d{2}$/.test(record.date) ||
           !Number.isFinite(record.value) || record.value < 0) continue;
       energyByDay[record.date] = record.value;
       accepted += 1;
     }
     if (!accepted) return;
-    const totals = emptyTotals();
-    let energyWh = 0;
-    for (const [date, value] of Object.entries(energyByDay)) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
-      const [year, month] = date.split('-');
-      totals.daily[date] = value;
-      const monthKey = year + '-' + month;
-      totals.monthly[monthKey] = (totals.monthly[monthKey] || 0) + value;
-      totals.yearly[year] = (totals.yearly[year] || 0) + value;
-      energyWh += value;
-    }
     this.state.devices[deviceId] = {
       ...previous,
       id: deviceId,
@@ -112,8 +101,34 @@ class EnergyStore {
       timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
       latestDate: typeof metadata.latestDate === 'string' ? metadata.latestDate : (previous.latestDate || null),
       energyByDay,
-      energyWh,
-      totals
+      energyByMonth: previous.energyByMonth || {}
+    };
+    this.rebuildCloudTotals();
+    this.save();
+  }
+
+  recordMonthlyEnergy(deviceId, records, metadata = {}) {
+    if (typeof deviceId !== 'string' || !deviceId.trim() || !Array.isArray(records)) return;
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {}, energyByMonth: {} };
+    const energyByMonth = { ...(previous.energyByMonth || {}) };
+    let accepted = 0;
+    for (const record of records) {
+      if (!record || typeof record.month !== 'string' ||
+          !/^\\d{4}-(?:0[1-9]|1[0-2])$/.test(record.month) ||
+          !Number.isFinite(record.value) || record.value < 0) continue;
+      energyByMonth[record.month] = record.value;
+      accepted += 1;
+    }
+    if (!accepted) return;
+    this.state.devices[deviceId] = {
+      ...previous,
+      id: deviceId,
+      active: true,
+      name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
+      model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
+      source: 'tapo_cloud',
+      timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
+      energyByMonth
     };
     this.rebuildCloudTotals();
     this.save();
@@ -123,16 +138,29 @@ class EnergyStore {
     const totals = emptyTotals();
     for (const device of Object.values(this.state.devices)) {
       if (!device || device.source !== 'tapo_cloud') continue;
-      const daily = device.energyByDay && Object.keys(device.energyByDay).length
-        ? device.energyByDay : (device.totals && device.totals.daily) || {};
-      for (const [date, value] of Object.entries(daily)) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
+      const daily = emptyTotals();
+      const dailyMonthly = {};
+      for (const [date, value] of Object.entries(device.energyByDay || {})) {
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
         const [year, month] = date.split('-');
-        totals.daily[date] = (totals.daily[date] || 0) + value;
+        daily.daily[date] = value;
         const monthKey = year + '-' + month;
+        dailyMonthly[monthKey] = (dailyMonthly[monthKey] || 0) + value;
+        totals.daily[date] = (totals.daily[date] || 0) + value;
+      }
+      const monthly = { ...dailyMonthly, ...(device.energyByMonth || {}) };
+      const yearly = {};
+      for (const [monthKey, value] of Object.entries(monthly)) {
+        if (!/^\\d{4}-(?:0[1-9]|1[0-2])$/.test(monthKey) || !Number.isFinite(value) || value < 0) continue;
+        const year = monthKey.slice(0, 4);
+        yearly[year] = (yearly[year] || 0) + value;
         totals.monthly[monthKey] = (totals.monthly[monthKey] || 0) + value;
+      }
+      for (const [year, value] of Object.entries(yearly)) {
         totals.yearly[year] = (totals.yearly[year] || 0) + value;
       }
+      device.totals = { daily: daily.daily, monthly, yearly };
+      device.energyWh = Object.values(monthly).reduce((sum, value) => sum + value, 0);
     }
     this.state.totals = totals;
   }
