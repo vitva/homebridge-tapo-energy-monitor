@@ -38,6 +38,8 @@ jobs:
       - name: Install npm CLI with staged publishing support
         run: npm install --global npm@11.21.3
       - name: Preflight npm version and staged candidates
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           PACKAGE_NAME="$(node -p "require('./package.json').name")"
