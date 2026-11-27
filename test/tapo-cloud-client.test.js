@@ -289,6 +289,10 @@ test('probes read-only P110M cloud resources and reports model service names', a
       async getThingResource(_id, resource) {
         if (resource === 'details') return { fwVer: '1.0', macAddress: 'should-not-appear' };
         if (resource === 'settings') return { region: 'Europe/Helsinki' };
+        if (resource === 'rt-info') return {
+          device_status: { current_power: 87.5, voltage_mv: 230400, current_ma: 380 },
+          unrelated: { serialNumber: 'must-not-appear' }
+        };
         return { safeField: true };
       },
       async getShadows(_id, _host, matter) {
@@ -312,6 +316,13 @@ test('probes read-only P110M cloud resources and reports model service names', a
   const stages = result.diagnostics.map(item => item.stage);
   for (const stage of ['cloud_details', 'cloud_rt_info', 'cloud_settings', 'cloud_shadows',
     'cloud_matter_shadows', 'cloud_model']) assert.ok(stages.includes(stage));
+  const rtInfo = result.diagnostics.find(item => item.stage === 'cloud_rt_info');
+  assert.match(rtInfo.reason, /current_power=87.5/);
+  assert.match(rtInfo.reason, /voltage_mv=230400/);
+  assert.match(rtInfo.reason, /current_ma=380/);
+  const shadows = result.diagnostics.find(item => item.stage === 'cloud_shadows');
+  assert.match(shadows.reason, /reported.power=123/);
+  assert.equal(JSON.stringify(result).includes('must-not-appear'), false);
   const model = result.diagnostics.find(item => item.stage === 'cloud_model');
   assert.match(model.reason, /reverseStatus/);
   assert.match(model.reason, /clearEnergyData/);
