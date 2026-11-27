@@ -147,8 +147,11 @@ jobs:
                 constructor(log, config, platformApi) {
                   super(log, { ...config, enableMatterMeter: true }, platformApi);
                   platformApi.on('didFinishLaunching', () => {
-                    this.runMatterCloudFixture().catch(error => {
+                    this.runMatterCloudFixture().then(() => {
+                      setTimeout(() => process.exit(0), 250);
+                    }).catch(error => {
                       log.error('[MATTER CLOUD CI] integration failed: %s', error.stack || error.message);
+                      setTimeout(() => process.exit(1), 250);
                     });
                   });
                 }
@@ -201,7 +204,7 @@ jobs:
           CLOUD_EXIT_CODE=$?
           set -e
           cat "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
-          if [ "$CLOUD_EXIT_CODE" -ne 124 ] && [ "$CLOUD_EXIT_CODE" -ne 137 ]; then
+          if [ "$CLOUD_EXIT_CODE" -ne 0 ] && [ "$CLOUD_EXIT_CODE" -ne 124 ] && [ "$CLOUD_EXIT_CODE" -ne 137 ]; then
             echo "Cloud Matter Homebridge exited unexpectedly (code $CLOUD_EXIT_CODE)." >&2
             exit 1
           fi
