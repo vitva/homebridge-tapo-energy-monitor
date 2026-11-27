@@ -55,6 +55,10 @@ class TapoEnergyMonitorPlatform {
 
   async start() {
     if (this.timer) return;
+    if (process.env.HOMEBRIDGE_TAPO_ENERGY_MONITOR_MATTER_CI === '1') {
+      await this.runMatterCloudCiFixture();
+      return;
+    }
     if (this.config.simulationMode !== true) {
       const username = typeof this.config.tapoCloudUsername === 'string' ? this.config.tapoCloudUsername.trim() : '';
       const password = typeof this.config.tapoCloudPassword === 'string' ? this.config.tapoCloudPassword : '';
@@ -316,6 +320,36 @@ class TapoEnergyMonitorPlatform {
     }
 
     return meter;
+  }
+
+  async runMatterCloudCiFixture() {
+    if (!this.api?.matter) throw new Error('Matter API is unavailable in the cloud endpoint integration runtime.');
+
+    // Exercise the same registration and cleanup sequence used in cloud mode.
+    await this.registerMatterMeter();
+    await this.registerCloudMatterMeter();
+    if (!this.cloudMatterMeterUuid) throw new Error('Cloud Matter endpoint was not registered.');
+
+    const summary = {
+      devices: {
+        fixture: { source: 'tapo_cloud', active: true, energyWh: 123.456 }
+      }
+    };
+    const result = await this.publishCloudMatterReading(summary);
+    if (!result) throw new Error('Cloud Matter energy update returned no result.');
+
+    const cluster = this.api.matter.clusterNames.ElectricalEnergyMeasurement;
+    const state = await waitForMatterClusterState(
+      this.api.matter,
+      this.cloudMatterMeterUuid,
+      cluster,
+      value => Number(value?.cumulativeEnergyImported?.energy) === 123456
+    );
+    const energy = Number(state?.cumulativeEnergyImported?.energy);
+    if (!Number.isFinite(energy) || energy !== 123456) {
+      throw new Error('Cloud Matter integration readback mismatch: ' + JSON.stringify(state));
+    }
+    this.log.info('[MATTER CLOUD CI] endpoint and energy readback verified: %s mWh', energy);
   }
 
   async registerMatterMeter() {
