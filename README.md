@@ -2,6 +2,11 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
+## Beta 0.2.0-beta.26
+
+- Added safe diagnostics for discovering live electrical fields in Tapo Cloud `rt-info` and `shadows` responses. Logs report only relevant electrical candidates and paths, not full cloud payloads or unrelated device identifiers.
+- No changes to Homebridge JSON configuration, Matter meter publication, energy history calculations, or device control behavior.
+
 ## Beta 0.2.0-beta.25
 
 - Corrected Matter periodic imported energy: it now publishes the verified authoritative current-month total from Tapo Cloud, rather than a delta between successive cloud polls.
@@ -66,7 +71,7 @@ All persistent history is written under the Homebridge storage directory returne
 - S112 and S110E cloud history are not implemented.
 - Verified live cloud power (W) is not currently available.
 - Missing/offline periods are not filled with invented values. Unverified daily date alignment is skipped.
-- No npm package is published by this beta preparation.
+- Beta releases are staged through the repository's npm approval workflow.
 
 ## Development
 
