@@ -403,6 +403,10 @@ async function probeTapoThingCloud(options = {}) {
       .filter(item => /P110M/i.test(item.device.model) && item.device.id);
 
     const readings = [];
+    const sumEnergyWh = values => values.reduce((sum, value) => {
+      const numeric = Number(value);
+      return sum + (Number.isFinite(numeric) && numeric >= 0 ? numeric : 0);
+    }, 0);
     if (candidates.length === 0) diagnostic(diagnostics, 'usage', 'skipped', Date.now());
     for (let index = 0; index < candidates.length; index += 1) {
       const item = candidates[index];
@@ -434,6 +438,7 @@ async function probeTapoThingCloud(options = {}) {
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
               '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
+              '; сумма истории=' + sumEnergyWh(history.records.map(record => record.value)) + ' Wh' +
               '; local_time=' + (history.meta.localTime || '—') +
               '; local_date=' + (history.meta.localDate || '—') +
               '; end_date=' + history.meta.endBoundaryDate +
@@ -505,6 +510,8 @@ async function probeTapoThingCloud(options = {}) {
                   '; запрошено start=' + usageRange.start_timestamp + '/' + quarterStart +
                   ', end=' + usageRange.end_timestamp +
                   '; точек=' + primaryValues.length + '/' + quarterValues.length +
+                  '; суммы=' + sumEnergyWh(primaryValues) + '/' + sumEnergyWh(quarterValues) + ' Wh' +
+                  '; разница=' + (sumEnergyWh(quarterValues) - sumEnergyWh(primaryValues)) + ' Wh' +
                   '; совпадение=' + (sameSequence ? 'полное' : 'нет') +
                   '; лучший сдвиг=' + bestOffset + ' (ненулевые совпадения=' +
                   Math.max(0, bestNonZeroMatches) + '/' + bestNonZeroCompared + ')' +
