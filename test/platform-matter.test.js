@@ -272,3 +272,17 @@ test('does not turn a fresh zero-valued Matter endpoint into a fake historical i
   assert.equal(await platform.restoreCloudMatterLastReading(), null);
   assert.equal(platform.cloudMatterLastReading, null);
 });
+
+
+test('keeps cloud operation available when Matter accessory construction throws', async () => {
+  const matter = {
+    uuid: { generate: () => { throw new Error('UUID service unavailable'); } },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
+    registerPlatformAccessories: async () => { throw new Error('must not be reached'); }
+  };
+  const { platform, warnings } = makePlatform({}, matter);
+
+  await assert.doesNotReject(() => platform.registerCloudMatterMeter());
+  assert.equal(platform.cloudMatterMeterUuid, null);
+  assert.match(warnings[0], /UUID service unavailable/);
+});
