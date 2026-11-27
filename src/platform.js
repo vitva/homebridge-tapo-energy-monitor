@@ -193,8 +193,11 @@ class TapoEnergyMonitorPlatform {
       await matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
       this.cloudMatterMeterUuid = accessory.UUID;
       this.cloudMatterRegistrationRetryAt = 0;
+      const restored = await this.restoreCloudMatterLastReading();
+      if (restored === undefined) {
+        throw new Error('Homebridge accepted the registration request but the Matter energy endpoint/cluster is not available.');
+      }
       this.log.info('[MATTER CLOUD REGISTERED] %s | %s', accessory.UUID, accessory.displayName);
-      await this.restoreCloudMatterLastReading();
 
       // Do not remove the old simulation meter until the cloud endpoint is safely registered.
       if (typeof matter.unregisterPlatformAccessories === 'function') {
@@ -217,7 +220,8 @@ class TapoEnergyMonitorPlatform {
 
   async restoreCloudMatterLastReading() {
     const matter = this.api && this.api.matter;
-    if (!this.cloudMatterMeterUuid || typeof matter?.getAccessoryState !== 'function') return null;
+    if (!this.cloudMatterMeterUuid) return null;
+    if (typeof matter?.getAccessoryState !== 'function') return undefined;
 
     try {
       const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
@@ -225,7 +229,7 @@ class TapoEnergyMonitorPlatform {
       if (state === undefined) {
         this.log.warn('[MATTER CLOUD RESTORE] %s | Matter endpoint/cluster state is unavailable after registration; cached reading cannot be restored',
           this.cloudMatterMeterUuid);
-        return null;
+        return undefined;
       }
       const imported = state.cumulativeEnergyImported;
       const energyMWh = Number(imported?.energy);
@@ -249,9 +253,9 @@ class TapoEnergyMonitorPlatform {
         this.cloudMatterMeterUuid);
       return null;
     } catch (error) {
-      this.log.warn('[MATTER CLOUD RESTORE] %s | could not restore previous reading: %s',
+      this.log.warn('[MATTER CLOUD RESTORE] %s | Matter endpoint state could not be verified: %s',
         this.cloudMatterMeterUuid, error.message);
-      return null;
+      return undefined;
     }
   }
 

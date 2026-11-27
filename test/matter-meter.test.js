@@ -88,20 +88,43 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
   assert.deepEqual(result, {
     cumulativeEnergyWh: 730,
     periodicEnergyWh: 0,
-    timestamp: 853315200
+    timestamp: 1800000000
   });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
-      cumulativeEnergyImported: { energy: 730000, endTimestamp: 853315200 },
+      cumulativeEnergyImported: { energy: 730000, endTimestamp: 1800000000 },
       periodicEnergyImported: {
         energy: 0,
-        startTimestamp: 853315199,
-        endTimestamp: 853315200
+        startTimestamp: 1799999999,
+        endTimestamp: 1800000000
       }
     }]
   ]);
 });
 
+
+test('uses Unix epoch seconds required by the Matter.js epoch-s validator', async () => {
+  const { api, updates } = mockApi();
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: { cloudA: { source: 'tapo_cloud', energyWh: 1 } }
+  }, null, 1_800_000_000_000);
+
+  assert.equal(result.timestamp, 1800000000);
+  assert.equal(updates[0][2].cumulativeEnergyImported.endTimestamp, 1800000000);
+  assert.ok(updates[0][2].cumulativeEnergyImported.endTimestamp >= 946684800);
+  assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, 1799999999);
+});
+
+test('rejects Matter timestamps before the supported Unix epoch minimum', async () => {
+  const { api, updates } = mockApi();
+  await assert.rejects(
+    () => updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+      devices: { cloudA: { source: 'tapo_cloud', energyWh: 1 } }
+    }, null, 946684799000),
+    /Unix epoch seconds/
+  );
+  assert.equal(updates.length, 0);
+});
 
 test('publishes the change since the previous cloud poll as periodic imported energy', async () => {
   const { api, updates } = mockApi();
@@ -109,22 +132,22 @@ test('publishes the change since the previous cloud poll as periodic imported en
     devices: {
       cloudA: { source: 'tapo_cloud', energyWh: 735.25 }
     }
-  }, { cumulativeEnergyWh: 730, timestamp: 853315200 }, 1_800_000_900_000);
+  }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
 
   assert.deepEqual(result, {
     cumulativeEnergyWh: 735.25,
     periodicEnergyWh: 5.25,
-    timestamp: 853316100
+    timestamp: 1800000900
   });
   assert.deepEqual(updates[0], [
     'cloud-meter-uuid',
     'electricalEnergyMeasurement',
     {
-      cumulativeEnergyImported: { energy: 735250, endTimestamp: 853316100 },
+      cumulativeEnergyImported: { energy: 735250, endTimestamp: 1800000900 },
       periodicEnergyImported: {
         energy: 5250,
-        startTimestamp: 853315200,
-        endTimestamp: 853316100
+        startTimestamp: 1800000000,
+        endTimestamp: 1800000900
       }
     }
   ]);
@@ -134,7 +157,7 @@ test('does not publish a negative periodic delta when cloud totals are corrected
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
-  }, { cumulativeEnergyWh: 730, timestamp: 853315200 }, 1_800_000_900_000);
+  }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
 
   assert.equal(result.periodicEnergyWh, 0);
   assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
