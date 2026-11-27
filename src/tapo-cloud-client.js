@@ -439,6 +439,18 @@ async function probeTapoThingCloud(options = {}) {
               '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
               '; сумма истории=' + sumEnergyWh(history.records.map(record => record.value)) + ' Wh' +
+              '; счётчики today/month=' +
+                ((usage?.energy_usage?.energy_usage || usage?.energy_usage || {}).today_energy_mwh ?? '—') + '/' +
+                ((usage?.energy_usage?.energy_usage || usage?.energy_usage || {}).month_energy_mwh ?? '—') + ' mWh' +
+              '; сумма текущего месяца по дням=' +
+                sumEnergyWh(history.records.filter(record =>
+                  record.date.slice(0, 7) === (history.meta.localDate || '').slice(0, 7)
+                ).map(record => record.value)) + ' Wh' +
+              '; последний дневной bucket=' + (history.records.at(-1)?.value ?? '—') + ' Wh' +
+              '; последний ненулевой день=' +
+                (history.records.filter(record => record.value > 0).at(-1)?.date || 'нет') +
+              '; нулевых bucket в конце=' +
+                history.records.slice().reverse().findIndex(record => record.value > 0) +
               '; local_time=' + (history.meta.localTime || '—') +
               '; local_date=' + (history.meta.localDate || '—') +
               '; end_date=' + history.meta.endBoundaryDate +
