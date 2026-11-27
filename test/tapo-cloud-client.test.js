@@ -406,11 +406,11 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.meta.requestedDays, 61);
   assert.equal(parsed.meta.returnedDays, 91);
   assert.equal(parsed.meta.rangeMismatch, true);
-  assert.equal(parsed.meta.valueUnit, 'unconfirmed');
+  assert.equal(parsed.meta.valueUnit, 'Wh');
   assert.equal(parsed.meta.timeZone, 'Europe/Moscow');
   assert.equal(parsed.meta.startTimestamp, 1790456400);
   assert.equal(parsed.meta.endTimestamp, 1795726800);
-  assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.meta.alignmentVerified, true);
   assert.equal(parsed.records[58].date, '2026-10-25');
   assert.equal(parsed.records[86].date, '2026-11-22');
 });
@@ -432,7 +432,7 @@ test('uses local_time after midnight to verify the last daily record date', () =
   assert.equal(parsed.meta.endBoundaryDate, '2026-11-28');
   assert.equal(parsed.meta.lastDate, '2026-11-27');
   assert.equal(parsed.meta.lastRecordMatchesLocalDate, true);
-  assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.meta.alignmentVerified, true);
 });
 
 test('flags a last-record date that disagrees with local_time', () => {
