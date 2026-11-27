@@ -2,6 +2,11 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
+## Beta 0.2.0-beta.27
+
+- Fixed the plugin settings UI so Tapo credentials can be saved when Homebridge supplies a single scoped platform configuration without an explicit `platform` field.
+- Kept the cloud diagnostic request read-only; MFA codes are not saved and credentials are handled by the existing Homebridge configuration flow.
+
 ## Beta 0.2.0-beta.26
 
 - Added safe diagnostics for discovering live electrical fields in Tapo Cloud `rt-info` and `shadows` responses. Logs report only relevant electrical candidates and paths, not full cloud payloads or unrelated device identifiers.
