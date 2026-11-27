@@ -114,7 +114,9 @@ class TapoCloudEnergyMonitor {
       }
       store.recordDailyEnergy(device.id, history.records, {
         name: device.name,
-        model: device.model
+        model: device.model,
+        timeZone: info.region,
+        latestDate: history.meta.lastDate
       });
       importedDevices += 1;
     }
