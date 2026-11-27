@@ -139,14 +139,18 @@ test('publishes the initial simulated sample to the registered Matter meter', as
 
 test('registers a separate real cloud energy meter for cloud mode', async () => {
   const registered = [];
+  const unregistered = [];
   const matter = {
     uuid: { generate: value => 'uuid:' + value },
     deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
     registerPlatformAccessories: async (...args) => registered.push(args)
   };
   const { platform } = makePlatform({}, matter);
+  platform.api.unregisterPlatformAccessories = async (...args) => unregistered.push(args);
   await platform.registerCloudMatterMeter();
 
+  assert.equal(unregistered.length, 1);
+  assert.equal(unregistered[0][2][0].UUID, 'uuid:tapo-energy-estimated-total');
   assert.equal(registered.length, 1);
   const accessory = registered[0][2][0];
   assert.equal(accessory.UUID, 'uuid:tapo-energy-cloud-total');
