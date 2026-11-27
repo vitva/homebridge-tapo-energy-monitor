@@ -1,0 +1,38 @@
+name: Audit npm package registry state
+
+on:
+  push:
+    branches: [feature/node-tapo-thing-cloud]
+    paths:
+      - ".github/workflows/npm-registry-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Install npm staged-publishing CLI
+        run: npm install --global npm@11.21.3
+      - name: Read public registry metadata
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          echo "=== PACKAGE ==="
+          echo "$PACKAGE_NAME"
+          echo "=== ALL PUBLISHED VERSIONS, DIST-TAGS, MAINTAINERS AND PUBLISH TIMES ==="
+          npm view "$PACKAGE_NAME" versions dist-tags maintainers time --json
+          echo "=== EXACT CURRENT VERSION METADATA ==="
+          npm view "$PACKAGE_NAME@$PACKAGE_VERSION" _npmUser _npmVersion _nodeVersion dist --json
+          echo "=== STAGED VERSIONS VISIBLE TO THIS TOKEN ==="
+          npm stage list "$PACKAGE_NAME" --json
