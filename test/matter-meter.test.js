@@ -66,7 +66,7 @@ test('creates a distinct cloud Matter meter with no fabricated live power', () =
   assert.equal(accessory.deviceType, 'ElectricalMeterType');
   assert.equal(accessory.context.measurementSource, 'tapo_cloud');
   assert.equal(accessory.context.testBuild, true);
-  assert.equal(accessory.clusters.electricalPowerMeasurement, undefined);
+  assert.equal(accessory.clusters.electricalPowerMeasurement.activePower, null);
   assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported, { energy: 0 });
 });
 
