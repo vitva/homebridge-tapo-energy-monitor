@@ -130,3 +130,31 @@ test('marks removed devices inactive without deleting their historical totals', 
     assert.equal(summary.totals.daily['2026-11-25'], 100);
   });
 });
+
+test('keeps cumulative cloud energy across a calendar-year rollover without double counting', () => {
+  withStore(store => {
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-12-30', value: 1000 },
+      { date: '2026-12-31', value: 1500 }
+    ]);
+    store.recordMonthlyEnergy('cloud-p110m', [
+      { month: '2026-12', value: 2500 }
+    ]);
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2027-01-01', value: 700 },
+      { date: '2027-01-02', value: 900 }
+    ]);
+    store.recordMonthlyEnergy('cloud-p110m', [
+      { month: '2027-01', value: 1600 }
+    ]);
+
+    const summary = store.getSummary();
+    assert.equal(summary.devices['cloud-p110m'].energyWh, 4100);
+    assert.equal(summary.totals.monthly['2026-12'], 2500);
+    assert.equal(summary.totals.monthly['2027-01'], 1600);
+    assert.equal(summary.totals.yearly['2026'], 2500);
+    assert.equal(summary.totals.yearly['2027'], 1600);
+    assert.equal(summary.totals.daily['2026-12-31'], 1500);
+    assert.equal(summary.totals.daily['2027-01-01'], 700);
+  });
+});
