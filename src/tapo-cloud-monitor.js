@@ -82,11 +82,12 @@ class TapoCloudEnergyMonitor {
     if (!this.api) await this.connect();
     await this.refreshSession();
     await this.refreshDevices();
+    store.setActiveDevices(this.devices.map(device => device.id));
     let importedDevices = 0;
     for (const device of this.devices) {
       const info = this.deviceInfo.get(device.id) || { region: 'UTC', host: device.host };
       const range = buildDailyUsageRange(info.region);
-      range.start_timestamp = buildQuarterStartTimestamp(info.region, range.end_timestamp);
+      range.start_timestamp = buildQuarterStartTimestamp(info.region, range.end_timestamp - 1);
       const usage = await this.api.getUsage(device.id, info.host, range);
       const history = normalizeDailyEnergyHistory(usage, info.region);
       if (!history.ok) {
