@@ -172,7 +172,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
-      valueUnit: 'unconfirmed',
+      valueUnit: 'Wh',
       timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
       localTime,
       localDate,
