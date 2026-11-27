@@ -240,3 +240,35 @@ test('retries cloud Matter registration only when enabled and retry time has ela
   assert.equal(await platform.ensureCloudMatterMeterRegistration(), false);
   assert.equal(attempts, 1);
 });
+
+
+test('restores the previous cumulative Matter reading after a plugin restart', async () => {
+  const matter = {
+    clusterNames: { ElectricalEnergyMeasurement: 'electricalEnergyMeasurement' },
+    getAccessoryState: async (uuid, cluster) => {
+      assert.equal(uuid, 'cloud-meter-uuid');
+      assert.equal(cluster, 'electricalEnergyMeasurement');
+      return { cumulativeEnergyImported: { energy: 125500, endTimestamp: 853315200 } };
+    }
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.cloudMatterMeterUuid = 'cloud-meter-uuid';
+
+  const restored = await platform.restoreCloudMatterLastReading();
+
+  assert.deepEqual(restored, { cumulativeEnergyWh: 125.5, timestamp: 853315200 });
+  assert.deepEqual(platform.cloudMatterLastReading, restored);
+});
+
+test('does not turn a fresh zero-valued Matter endpoint into a fake historical interval', async () => {
+  const matter = {
+    getAccessoryState: async () => ({
+      cumulativeEnergyImported: { energy: 0, endTimestamp: 853315200 }
+    })
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.cloudMatterMeterUuid = 'new-cloud-meter-uuid';
+
+  assert.equal(await platform.restoreCloudMatterLastReading(), null);
+  assert.equal(platform.cloudMatterLastReading, null);
+});
