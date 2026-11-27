@@ -2,8 +2,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { runTapoCloudProbe } = require('../src/tapo-cloud');
 const { probeTapoThingCloud } = require('../src/tapo-cloud-client');
+const { TapoCloudAuth } = require('../src/tapo-cloud-auth');
+const { getStableTapoTermId } = require('../src/tapo-cloud-identity');
 const { parseWattCsv } = require('../src/watt-csv');
 
 (async () => {
@@ -30,7 +31,7 @@ const { parseWattCsv } = require('../src/watt-csv');
         if (!data || !data.devices || !data.totals) throw new Error('Invalid energy history format.');
         return { available: true, updatedAt: fs.statSync(filePath).mtimeMs, data };
       } catch (error) {
-        if (error.code === 'ENOENT') return { available: false, message: 'No history file yet. Start the platform in simulation mode and wait for its first sample.' };
+        if (error.code === 'ENOENT') return { available: false, message: 'Истории пока нет. Укажите данные аккаунта Tapo или включите режим симуляции.' };
         throw error;
       }
     }
@@ -74,20 +75,17 @@ const { parseWattCsv } = require('../src/watt-csv');
       const username = typeof payload.username === 'string' ? payload.username.trim() : '';
       const password = typeof payload.password === 'string' ? payload.password : '';
       const mfaCode = typeof payload.mfaCode === 'string' ? payload.mfaCode.trim() : '';
-      const pythonExecutable = typeof payload.pythonExecutable === 'string' && payload.pythonExecutable.trim()
-        ? payload.pythonExecutable.trim()
-        : 'python3';
-      const transport = payload.transport === 'node' ? 'node' : 'python';
       if (!username || !password) {
         return { ok: false, code: 'credentials_required', message: 'Укажите email и пароль аккаунта Tapo.' };
       }
       if (username.length > 320 || password.length > 2048 || mfaCode.length > 32) {
         return { ok: false, code: 'invalid_input', message: 'Проверьте длину введённых данных.' };
       }
-      if (transport === 'node') {
-        return probeTapoThingCloud({ username, password, mfaCode });
-      }
-      return runTapoCloudProbe({ username, password, mfaCode, pythonExecutable });
+      const storageDirectory = this.homebridgeStoragePath;
+      const auth = new TapoCloudAuth({
+        termId: storageDirectory ? getStableTapoTermId(storageDirectory) : undefined
+      });
+      return probeTapoThingCloud({ username, password, mfaCode, auth });
     }
   }
 

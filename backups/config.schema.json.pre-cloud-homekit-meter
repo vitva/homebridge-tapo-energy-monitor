@@ -1,0 +1,103 @@
+{
+  "pluginAlias": "TapoEnergyMonitor",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Tapo Energy Monitor imports daily P110M energy history from Tapo Cloud when account credentials are configured. Simulation remains optional.",
+  "footerDisplay": "Tapo email and password are saved in the Homebridge config.json for automatic re-authentication. The password is stored in plain text. MFA codes are never saved.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Platform name",
+        "type": "string",
+        "default": "Tapo Energy Monitor"
+      },
+      "simulationMode": {
+        "title": "Simulation mode",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable only to run an explicit simulation. Leave off to collect real P110M daily history from Tapo Cloud using the saved account credentials."
+      },
+      "enableMatterMeter": {
+        "title": "Publish Matter Electrical Meter",
+        "type": "boolean",
+        "default": true,
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes the estimated Matter meter in simulation mode only. Live cloud history is stored in the dashboard and is not exported as a Matter meter yet."
+      },
+      "matterMeterName": {
+        "title": "Matter meter name",
+        "type": "string",
+        "default": "Tapo Energy — Расчётная"
+      },
+      "pollingIntervalSeconds": {
+        "title": "Cloud/simulation polling interval (seconds)",
+        "type": "integer",
+        "default": 900,
+        "minimum": 30,
+        "maximum": 3600
+      },
+      "simulatedDevices": {
+        "title": "Simulated devices",
+        "type": "array",
+        "description": "Add at least one row to explicitly start simulation. Empty list means the platform remains idle.",
+        "items": {
+          "type": "object",
+          "title": "Device",
+          "properties": {
+            "id": {
+              "title": "Unique device ID",
+              "type": "string"
+            },
+            "name": {
+              "title": "Display name",
+              "type": "string"
+            },
+            "model": {
+              "title": "Model",
+              "type": "string",
+              "enum": [
+                "P110M",
+                "S112",
+                "S110E",
+                "Other"
+              ],
+              "default": "P110M"
+            },
+            "powerW": {
+              "title": "Simulated power (W)",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000,
+              "default": 100
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "powerW"
+          ]
+        }
+      },
+      "tapoCloudUsername": {
+        "title": "Tapo account email",
+        "type": "string",
+        "format": "email",
+        "description": "Saved in Homebridge config.json and reused for cloud authentication."
+      },
+      "tapoCloudPassword": {
+        "title": "Tapo account password",
+        "type": "string",
+        "format": "password",
+        "description": "Stored in plain text in Homebridge config.json. Keep the file and backups private."
+      }
+    },
+    "required": [
+      "name",
+      "simulationMode",
+      "pollingIntervalSeconds"
+    ]
+  },
+  "form": null,
+  "display": null,
+  "customUi": true
+}
