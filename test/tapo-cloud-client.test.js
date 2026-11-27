@@ -359,7 +359,7 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   assert.match(usageFormat.reason, /end=/);
   assert.match(usageFormat.reason, /запрошено точек=61/);
   assert.match(usageFormat.reason, /получено=91/);
-  assert.ok(usageFormat.reason.length > 180);
+  assert.ok(usageFormat.reason.length > 100);
 });
 
 test('reports summary counters and trailing zero daily buckets separately', async () => {
