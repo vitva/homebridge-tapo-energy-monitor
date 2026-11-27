@@ -1,6 +1,7 @@
 'use strict';
 
 const { EnergyStore } = require('./energy-store');
+const { TapoCloudEnergyMonitor } = require('./tapo-cloud-monitor');
 const {
   PLUGIN_IDENTIFIER,
   PLATFORM_NAME,
@@ -29,7 +30,13 @@ class TapoEnergyMonitorPlatform {
   async start() {
     if (this.timer) return;
     if (this.config.simulationMode !== true) {
-      this.log.warn('Simulation is disabled, but real Tapo communication is not implemented. No devices will be polled.');
+      const username = typeof this.config.tapoCloudUsername === 'string' ? this.config.tapoCloudUsername.trim() : '';
+      const password = typeof this.config.tapoCloudPassword === 'string' ? this.config.tapoCloudPassword : '';
+      if (username && password) {
+        await this.startCloudMonitor(username, password);
+      } else {
+        this.log.warn('Simulation is disabled and Tapo Cloud credentials are not configured. No devices will be polled.');
+      }
       return;
     }
 
@@ -96,6 +103,26 @@ class TapoEnergyMonitorPlatform {
       sample().catch(error => this.log.error('Energy sample failed: %s', error.message));
     }, interval * 1000);
     this.log.info('Prototype started in simulation mode. No physical Tapo devices are contacted.');
+  }
+
+  async startCloudMonitor(username, password) {
+    const storageRoot = this.api.user.storagePath();
+    this.store = new EnergyStore(storageRoot, this.log);
+    this.cloudMonitor = new TapoCloudEnergyMonitor({ username, password, log: this.log });
+    const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
+    const interval = Math.max(300, Math.min(3600, configuredInterval));
+    const poll = async () => {
+      try {
+        const result = await this.cloudMonitor.poll(this.store);
+        this.log.info('[TAPO CLOUD] %s P110M devices found; %s histories updated.',
+          result.deviceCount, result.importedDevices);
+      } catch (error) {
+        this.log.error('Tapo Cloud energy history update failed: %s', error.message);
+      }
+    };
+    await poll();
+    this.timer = setInterval(poll, interval * 1000);
+    this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);
   }
 
   async registerMatterMeter() {
