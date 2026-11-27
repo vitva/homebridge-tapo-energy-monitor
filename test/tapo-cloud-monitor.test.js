@@ -28,8 +28,10 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
       async listThings() {
         return [{ thingName: 'p110m-1', nickname: 'Kitchen plug', model: 'P110M' }];
       },
-      async getThingResource() {
-        return { region: 'Europe/Moscow' };
+      async getThingResource(_id, resource) {
+        if (resource === 'details') return { ip: '192.168.1.40', mac: 'AA:BB:CC:DD:EE:FF' };
+        if (resource === 'settings') return { region: 'Europe/Moscow' };
+        return {};
       },
       async getUsage(_id, _host, range) {
         requestedRanges.push(range);
@@ -67,6 +69,7 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
   try {
     const result = await monitor.poll(store);
     assert.deepEqual(result, { deviceCount: 1, importedDevices: 1 });
+    assert.equal(monitor.deviceInfo.get('p110m-1').ip, '192.168.1.40');
     assert.equal(requestedRanges.some(range => range.interval === 1440), true);
     assert.equal(requestedRanges.some(range => range.interval === 43200), true);
     assert.equal(requestedRanges.every(range => range.start_timestamp < range.end_timestamp), true);

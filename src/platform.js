@@ -2,6 +2,7 @@
 
 const { EnergyStore } = require('./energy-store');
 const { TapoCloudEnergyMonitor } = require('./tapo-cloud-monitor');
+const { TapoLocalPowerMonitor } = require('./tapo-local-power');
 const { getStableTapoTermId } = require('./tapo-cloud-identity');
 const {
   PLUGIN_IDENTIFIER,
@@ -9,7 +10,8 @@ const {
   createEstimatedMeterAccessory,
   updateEstimatedMeter,
   createCloudEnergyMeterAccessory,
-  updateCloudEnergyMeter
+  updateCloudEnergyMeter,
+  updateCloudPowerMeter
 } = require('./matter-meter');
 
 class TapoEnergyMonitorPlatform {
@@ -18,6 +20,9 @@ class TapoEnergyMonitorPlatform {
     this.config = config || {};
     this.api = api;
     this.timer = null;
+    this.localPowerTimer = null;
+    this.localPowerMonitor = null;
+    this.lastMatterPowerW = undefined;
     this.store = null;
     this.matterMeterUuid = null;
     this.cloudMatterMeterUuid = null;
@@ -28,7 +33,11 @@ class TapoEnergyMonitorPlatform {
     });
     api.on('shutdown', () => {
       if (this.timer) clearInterval(this.timer);
+      if (this.localPowerTimer) clearInterval(this.localPowerTimer);
       this.timer = null;
+      this.localPowerTimer = null;
+      if (this.localPowerMonitor) this.localPowerMonitor.stop();
+      this.localPowerMonitor = null;
     });
   }
 
@@ -118,6 +127,11 @@ class TapoEnergyMonitorPlatform {
       termId: getStableTapoTermId(storageRoot)
     });
     await this.registerCloudMatterMeter();
+    try {
+      this.localPowerMonitor = new TapoLocalPowerMonitor({ username, password, log: this.log });
+    } catch (error) {
+      this.log.warn('Local Tapo power reader is unavailable; cloud energy history will continue: %s', error.message);
+    }
     const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
     const interval = Math.max(300, Math.min(3600, configuredInterval));
     const poll = async () => {
@@ -149,7 +163,30 @@ class TapoEnergyMonitorPlatform {
         this.log.error('Tapo Cloud energy history update failed: %s', error.message);
       }
     };
+    const pollLocalPower = async () => {
+      if (!this.localPowerMonitor || !this.cloudMonitor || !this.store) return;
+      try {
+        await this.localPowerMonitor.poll(this.cloudMonitor.devices, this.cloudMonitor.deviceInfo, this.store);
+        if (this.cloudMatterMeterUuid) {
+          const power = await updateCloudPowerMeter(this.api, this.cloudMatterMeterUuid, this.store.getSummary());
+          if (power && power.activePowerW !== this.lastMatterPowerW) {
+            this.lastMatterPowerW = power.activePowerW;
+            if (power.activePowerW === null) this.log.warn('[MATTER CLOUD] live power is unavailable; cumulative energy history remains active.');
+            else this.log.info('[MATTER CLOUD] live combined power: %s W', power.activePowerW.toFixed(1));
+          }
+        }
+      } catch (error) {
+        this.log.warn('Local Tapo power polling failed; cloud energy history will continue: %s', error.message);
+      }
+    };
     await poll();
+    if (this.localPowerMonitor) {
+      await pollLocalPower();
+      this.localPowerTimer = setInterval(() => {
+        pollLocalPower().catch(error => this.log.warn('Local Tapo power polling failed: %s', error.message));
+      }, 30_000);
+      this.log.info('Local Tapo P110M power polling started (every 30 seconds).');
+    }
     this.timer = setInterval(poll, interval * 1000);
     this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);
   }

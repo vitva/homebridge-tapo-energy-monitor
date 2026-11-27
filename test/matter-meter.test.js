@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEstimatedMeterAccessory, updateEstimatedMeter, createCloudEnergyMeterAccessory, updateCloudEnergyMeter } = require('../src/matter-meter');
+const { createEstimatedMeterAccessory, updateEstimatedMeter, createCloudEnergyMeterAccessory, updateCloudEnergyMeter, updateCloudPowerMeter } = require('../src/matter-meter');
 
 function mockApi() {
   const updates = [];
@@ -135,4 +135,44 @@ test('does not publish a negative periodic delta when cloud totals are corrected
 
   assert.equal(result.periodicEnergyWh, 0);
   assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
+});
+
+
+test('publishes live power in Matter mW only when every active cloud device has a fresh LAN sample', async () => {
+  const { api, updates } = mockApi();
+  const summary = {
+    devices: {
+      plugA: { source: 'tapo_cloud', active: true, powerW: 120.5, powerUpdatedAt: 1_000_000 },
+      plugB: { source: 'tapo_cloud', active: true, powerW: 79.5, powerUpdatedAt: 1_000_000 },
+      archived: { source: 'tapo_cloud', active: false, powerW: 900, powerUpdatedAt: 1_000_000 }
+    }
+  };
+  const result = await updateCloudPowerMeter(api, 'cloud-meter-uuid', summary, 1_000_030);
+  assert.deepEqual(result, { activePowerW: 200 });
+  assert.deepEqual(updates, [
+    ['cloud-meter-uuid', 'electricalPowerMeasurement', { activePower: 200000 }]
+  ]);
+  updates.length = 0;
+  summary.devices.plugB.powerW = null;
+  summary.devices.plugB.powerUpdatedAt = null;
+  const incomplete = await updateCloudPowerMeter(api, 'cloud-meter-uuid', summary, 1_000_030);
+  assert.deepEqual(incomplete, { activePowerW: null });
+  assert.deepEqual(updates, [
+    ['cloud-meter-uuid', 'electricalPowerMeasurement', { activePower: null }]
+  ]);
+});
+
+test('does not publish stale LAN power readings to Matter', async () => {
+  const { api, updates } = mockApi();
+  const result = await updateCloudPowerMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      plugA: { source: 'tapo_cloud', active: true, powerW: 100, powerUpdatedAt: 1_000_000 }
+    }
+  }, 1_100_000);
+  assert.deepEqual(result, { activePowerW: null });
+  assert.deepEqual(updates[0], [
+    'cloud-meter-uuid',
+    'electricalPowerMeasurement',
+    { activePower: null }
+  ]);
 });
