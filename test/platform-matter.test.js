@@ -281,6 +281,7 @@ test('keeps cloud operation available when Matter accessory construction throws'
     registerPlatformAccessories: async () => { throw new Error('must not be reached'); }
   };
   const { platform, warnings } = makePlatform({}, matter);
+  platform.log.warn = (message, detail) => warnings.push(String(message).replace('%s', detail));
 
   await assert.doesNotReject(() => platform.registerCloudMatterMeter());
   assert.equal(platform.cloudMatterMeterUuid, null);
