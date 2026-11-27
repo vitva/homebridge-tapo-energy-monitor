@@ -70,8 +70,6 @@ test('creates a distinct cloud Electrical Meter with required power cluster and 
   assert.equal(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.energy, 0);
   assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.endTimestamp));
   assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, null);
-  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.startTimestamp));
-  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.endTimestamp));
 });
 
 test('publishes only real cloud imported Wh as Matter mWh and excludes estimates', async () => {
@@ -87,17 +85,15 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
 
   assert.deepEqual(result, {
     cumulativeEnergyWh: 730,
-    periodicEnergyWh: 0,
-    timestamp: 1800000000
+    periodicEnergyWh: null,
+    timestamp: 1800000000,
+    dateKey: '2027-01-15',
+    timeZone: 'UTC'
   });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
       cumulativeEnergyImported: { energy: 730000, endTimestamp: 1800000000 },
-      periodicEnergyImported: {
-        energy: 0,
-        startTimestamp: 1799999999,
-        endTimestamp: 1800000000
-      }
+      periodicEnergyImported: null
     }]
   ]);
 });
@@ -112,7 +108,7 @@ test('uses Unix epoch seconds required by the Matter.js epoch-s validator', asyn
   assert.equal(result.timestamp, 1800000000);
   assert.equal(updates[0][2].cumulativeEnergyImported.endTimestamp, 1800000000);
   assert.ok(updates[0][2].cumulativeEnergyImported.endTimestamp >= 946684800);
-  assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, 1799999999);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
 });
 
 test('rejects Matter timestamps before the supported Unix epoch minimum', async () => {
@@ -195,12 +191,12 @@ test('uses the device timezone when calculating the current-day period start', a
   assert.equal(result.periodicEnergyWh, 10);
   assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, Date.UTC(2027, 0, 14, 21, 0, 0) / 1000);
 });
-test('does not publish a negative periodic delta when cloud totals are corrected down', async () => {
+test('does not derive periodic usage from cumulative corrections when daily history is unavailable', async () => {
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
-    devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
+    devices: { cloudA: { source: 'tapo_cloud', active: true, energyWh: 700, timeZone: 'UTC' } }
   }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
 
-  assert.equal(result.periodicEnergyWh, 0);
-  assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
+  assert.equal(result.periodicEnergyWh, null);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
 });
