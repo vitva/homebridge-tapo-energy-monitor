@@ -15,7 +15,7 @@ class TapoCloudEnergyMonitor {
     this.username = options.username;
     this.password = options.password;
     this.log = options.log || { info() {}, warn() {} };
-    this.auth = options.auth || new TapoCloudAuth();
+    this.auth = options.auth || new TapoCloudAuth({ termId: options.termId });
     this.apiFactory = options.apiFactory || (args => new TapoThingApi(args));
     this.api = null;
     this.session = null;
