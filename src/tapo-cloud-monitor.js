@@ -95,9 +95,12 @@ class TapoCloudEnergyMonitor {
   }
 
   async poll(store) {
-    if (!this.api) await this.connect();
-    await this.refreshSession();
-    await this.refreshDevices();
+    if (!this.api) {
+      await this.connect();
+    } else {
+      await this.refreshSession();
+      await this.refreshDevices();
+    }
     store.setActiveDevices(this.devices.map(device => device.id));
     let importedDevices = 0;
     for (const device of this.devices) {
