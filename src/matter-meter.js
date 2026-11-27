@@ -136,17 +136,19 @@ async function updateCloudEnergyMeter(api, uuid, summary, _previousReading = nul
     throw new RangeError('Matter energy timestamps must be Unix epoch seconds on or after 2000-01-01T00:00:00Z.');
   }
 
-  // Publish the verified Tapo daily bucket as periodic imported energy, not the
-  // difference between two cloud polls: cloud history often remains unchanged
-  // across 5-minute polls, which would otherwise keep the period value at zero.
+  // Publish the authoritative current-month cloud total as periodic imported
+  // energy. Daily history can be stale or incomplete, while the monthly endpoint
+  // remains the authoritative source for the current month.
   const timeZone = cloudDevices.find(device => typeof device.timeZone === 'string')?.timeZone || 'UTC';
   const dateKey = getDateKeyInTimeZone(nowMs, timeZone);
-  const hasCompleteDailyReading = cloudDevices.length > 0 &&
-    cloudDevices.every(device => Number.isFinite(device.energyByDay?.[dateKey]) && device.energyByDay[dateKey] >= 0);
-  const periodicEnergyWh = hasCompleteDailyReading
-    ? cloudDevices.reduce((total, device) => total + device.energyByDay[dateKey], 0)
+  const periodKey = dateKey.slice(0, 7);
+  const periodStartDateKey = periodKey + '-01';
+  const hasCompleteMonthlyReading = cloudDevices.length > 0 &&
+    cloudDevices.every(device => Number.isFinite(device.energyByMonth?.[periodKey]) && device.energyByMonth[periodKey] >= 0);
+  const periodicEnergyWh = hasCompleteMonthlyReading
+    ? cloudDevices.reduce((total, device) => total + device.energyByMonth[periodKey], 0)
     : null;
-  const startTimestamp = getStartOfDayTimestamp(dateKey, timeZone);
+  const startTimestamp = getStartOfDayTimestamp(periodStartDateKey, timeZone);
 
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
@@ -161,7 +163,7 @@ async function updateCloudEnergyMeter(api, uuid, summary, _previousReading = nul
     }
   });
 
-  return { cumulativeEnergyWh, periodicEnergyWh, timestamp, dateKey, timeZone };
+  return { cumulativeEnergyWh, periodicEnergyWh, timestamp, dateKey, periodKey, timeZone };
 }
 
 module.exports = {
