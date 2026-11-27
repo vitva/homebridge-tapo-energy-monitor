@@ -214,3 +214,29 @@ test('keeps a successful Matter update successful when readback independently fa
   assert.match(warnings[0], /MATTER CLOUD READBACK.*readback failed/);
   assert.equal(warnings.some(message => /Matter cloud energy update failed/.test(message)), false);
 });
+
+
+test('retries cloud Matter registration only when enabled and retry time has elapsed', async () => {
+  const matter = {};
+  const { platform } = makePlatform({ enableMatterMeter: false }, matter);
+  let attempts = 0;
+  platform.registerCloudMatterMeter = async () => { attempts += 1; };
+
+  assert.equal(await platform.ensureCloudMatterMeterRegistration(), false);
+  assert.equal(attempts, 0);
+
+  platform.config.enableMatterMeter = true;
+  platform.cloudMatterRegistrationRetryAt = Date.now() + 60000;
+  assert.equal(await platform.ensureCloudMatterMeterRegistration(), false);
+  assert.equal(attempts, 0);
+
+  platform.cloudMatterRegistrationRetryAt = 0;
+  platform.registerCloudMatterMeter = async () => {
+    attempts += 1;
+    platform.cloudMatterRegistrationRetryAt = Date.now() + 300000;
+  };
+  assert.equal(await platform.ensureCloudMatterMeterRegistration(), false);
+  assert.equal(attempts, 1);
+  assert.equal(await platform.ensureCloudMatterMeterRegistration(), false);
+  assert.equal(attempts, 1);
+});
