@@ -11,7 +11,9 @@
   <div id="dashboard" hidden>
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Current combined power</div><div class="fs-3 fw-semibold" id="power">—</div></div></div></div>
-      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Today · combined</div><div class="fs-3 fw-semibold" id="today">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small" id="today-label">Today · combined</div><div class="fs-3 fw-semibold" id="today">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">This month · combined</div><div class="fs-3 fw-semibold" id="month">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">This year · combined</div><div class="fs-3 fw-semibold" id="year">—</div></div></div></div>
       <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Devices in history</div><div class="fs-3 fw-semibold" id="count">—</div></div></div></div>
     </div>
 
@@ -102,23 +104,40 @@
       const data = result.data;
       const devices = Object.values(data.devices || {});
       const activeDevices = devices.filter(device => device.active !== false);
-      const cloudHistory = activeDevices.some(device => device.source === 'tapo_cloud');
-      const primaryCloudDevice = activeDevices.find(device => device.source === 'tapo_cloud' && device.latestDate);
+      const cloudDevices = activeDevices.filter(device => device.source === 'tapo_cloud');
+      const cloudHistory = cloudDevices.length > 0;
+      const primaryCloudDevice = cloudDevices.find(device => device.latestDate);
       const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
       // Combined cloud totals use active devices only; archived contributions
       // are displayed separately below without being added to account totals.
       const hasDailyValue = (device, date) => Object.prototype.hasOwnProperty.call(device.totals?.daily || {}, date);
-      const todayKnown = !cloudHistory || activeDevices.every(device => hasDailyValue(device, todayKey));
+      const todayKnown = !cloudHistory || cloudDevices.every(device => hasDailyValue(device, todayKey));
+      // If the current day's bucket is unverified/missing, show the latest date
+      // for which every active cloud device has a verified daily value.
+      const latestCommonDate = cloudHistory && cloudDevices.length
+        ? Object.keys(cloudDevices[0].totals?.daily || {})
+          .filter(date => cloudDevices.every(device => hasDailyValue(device, date)))
+          .sort()
+          .at(-1) || null
+        : null;
+      const displayedDayKey = cloudHistory && !todayKnown ? latestCommonDate : todayKey;
+      const displayedDayKnown = !cloudHistory || Boolean(displayedDayKey &&
+        cloudDevices.every(device => hasDailyValue(device, displayedDayKey)));
       const todayWh = cloudHistory
-        ? (todayKnown ? activeDevices.reduce((sum, device) => sum + Number(device.totals.daily[todayKey]), 0) : null)
+        ? (displayedDayKnown ? cloudDevices.reduce((sum, device) => sum + Number(device.totals.daily[displayedDayKey]), 0) : null)
         : (data.totals?.daily?.[todayKey] || 0);
       const archivedDevices = devices.filter(device => device.active === false);
-      const archivedTodayDevices = archivedDevices.filter(device => hasDailyValue(device, todayKey));
+      const archivedTodayDevices = archivedDevices.filter(device => hasDailyValue(device, displayedDayKey));
       const archivedTodayWh = archivedTodayDevices.reduce((sum, device) =>
-        sum + Number(device.totals.daily[todayKey]), 0);
+        sum + Number(device.totals.daily[displayedDayKey]), 0);
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
       byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
+      byId('today-label').textContent = displayedDayKey && displayedDayKey !== todayKey
+        ? 'Latest verified day · combined (' + displayedDayKey + ')'
+        : 'Today · combined';
       byId('today').textContent = todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh';
+      byId('month').textContent = number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh';
+      byId('year').textContent = number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh';
       byId('count').textContent = activeDevices.length + ' active';
 
       const body = byId('devices');
@@ -132,9 +151,9 @@
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = device.active !== false && Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
         const daily = document.createElement('td'); daily.className = 'text-end';
-        const dailyKey = todayKey;
+        const dailyKey = displayedDayKey;
         daily.textContent = hasDailyValue(device, dailyKey)
-          ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh' : '—';
+          ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh · ' + dailyKey : '—';
         tr.append(name, model, status, power, total, daily); body.append(tr);
       }
 
@@ -148,7 +167,9 @@
       const archivedYearWh = archivedDevices.reduce((sum, device) =>
         sum + Number(device.totals?.yearly?.[yearKey] || 0), 0);
       periods.append(
-        row('Today (' + todayKey + ')', number(todayWh / 1000, 3) + ' kWh'),
+        row(displayedDayKey && displayedDayKey !== todayKey
+          ? 'Latest verified day (' + displayedDayKey + ')'
+          : 'Today (' + todayKey + ')', todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh'),
         row('This month (' + monthKey + ')', number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh'),
         row('This year (' + yearKey + ')', number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh')
       );
