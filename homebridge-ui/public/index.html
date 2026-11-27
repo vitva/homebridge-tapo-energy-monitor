@@ -132,7 +132,7 @@
         const power = document.createElement('td'); power.className = 'text-end'; power.textContent = device.active !== false && Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
         const daily = document.createElement('td'); daily.className = 'text-end';
-        const dailyKey = device.latestDate || todayKey;
+        const dailyKey = todayKey;
         daily.textContent = hasDailyValue(device, dailyKey)
           ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh' : '—';
         tr.append(name, model, status, power, total, daily); body.append(tr);
