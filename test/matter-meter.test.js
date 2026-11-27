@@ -96,7 +96,7 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
       periodicEnergyImported: {
         energy: 0,
         startTimestamp: 1799999999,
-        endTimestamp: 853315200
+        endTimestamp: 1800000000
       }
     }]
   ]);
@@ -147,7 +147,7 @@ test('publishes the change since the previous cloud poll as periodic imported en
       periodicEnergyImported: {
         energy: 5250,
         startTimestamp: 1800000000,
-        endTimestamp: 853316100
+        endTimestamp: 1800000900
       }
     }
   ]);
@@ -157,7 +157,7 @@ test('does not publish a negative periodic delta when cloud totals are corrected
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
-  }, { cumulativeEnergyWh: 730, timestamp: 853315200 }, 1_800_000_900_000);
+  }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
 
   assert.equal(result.periodicEnergyWh, 0);
   assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
