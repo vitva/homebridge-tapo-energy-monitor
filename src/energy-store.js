@@ -120,7 +120,7 @@ class EnergyStore {
   rebuildCloudTotals() {
     const totals = emptyTotals();
     for (const device of Object.values(this.state.devices)) {
-      if (!device) continue;
+      if (!device || device.source !== 'tapo_cloud') continue;
       const daily = device.energyByDay && Object.keys(device.energyByDay).length
         ? device.energyByDay : (device.totals && device.totals.daily) || {};
       for (const [date, value] of Object.entries(daily)) {
