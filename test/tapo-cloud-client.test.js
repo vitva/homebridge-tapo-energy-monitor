@@ -415,6 +415,23 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.records[86].date, '2026-11-22');
 });
 
+test('anchors the final bucket to local_time when the cloud end timestamp is during that day', () => {
+  const parsed = normalizeDailyEnergyHistory({
+    energy_data: {
+      local_time: '2026-11-26 23:44:26',
+      data: [10, 20, 30],
+      start_timestamp: 1790456400,
+      end_timestamp: 1795726800,
+      interval: 1440
+    }
+  }, 'Europe/Helsinki');
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.meta.endBoundaryDate, '2026-11-26');
+  assert.equal(parsed.meta.lastDate, '2026-11-26');
+  assert.equal(parsed.meta.lastRecordMatchesLocalDate, true);
+  assert.equal(parsed.meta.alignmentVerified, true);
+});
+
 test('uses local_time after midnight to verify the last daily record date', () => {
   const parsed = normalizeDailyEnergyHistory({
     energy_data: {
