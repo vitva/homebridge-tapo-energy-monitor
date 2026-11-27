@@ -108,7 +108,7 @@
       // Period totals retain valid history from archived devices. Use the same
       // complete device set for combined energy, while live power stays active-only.
       const todayWh = cloudHistory
-        ? devices.reduce((sum, device) => sum + Number(device.totals?.daily?.[todayKey] || 0), 0)
+        ? activeDevices.reduce((sum, device) => sum + Number(device.totals?.daily?.[todayKey] || 0), 0)
         : (data.totals?.daily?.[todayKey] || 0);
       const archivedDevices = devices.filter(device => device.active === false);
       const archivedTodayWh = archivedDevices.reduce((sum, device) =>
