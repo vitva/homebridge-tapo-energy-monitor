@@ -59,10 +59,12 @@ class TapoLocalPowerMonitor {
 
       try {
         if (!connection.device) {
-          connection.device = await this.client.connect(ip, { name: device.id });
-          if (!/^P110M(?:$|[^A-Z0-9])/i.test(String(connection.device.model || ''))) {
+          const connectedDevice = await this.client.connect(ip, { name: device.id });
+          if (!/^P110M(?:$|[^A-Z0-9])/i.test(String(connectedDevice.model || ''))) {
+            this.client.devices?.delete?.(device.id);
             throw new Error('Local device model did not match P110M.');
           }
+          connection.device = connectedDevice;
           this.log.info('Local Tapo power reader connected to %s.', device.name || device.id);
         }
         // P110M reliably exposes current_power through get_energy_usage (mW).
@@ -90,6 +92,7 @@ class TapoLocalPowerMonitor {
       // Never publish a partial aggregate as if it represented the whole account.
       for (const device of candidates) store.clearPower(device.id);
     }
+    if (candidates.length > 0) store.save();
     return { deviceCount: candidates.length, available, unavailable: results.length - available };
   }
 

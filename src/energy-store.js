@@ -96,7 +96,6 @@ class EnergyStore {
       energyWh: Number.isFinite(previous.energyWh) ? previous.energyWh : 0,
       totals: previous.totals || emptyTotals()
     };
-    this.save();
   }
 
   clearPower(deviceId) {
@@ -104,7 +103,6 @@ class EnergyStore {
     const previous = this.state.devices[deviceId];
     if (!previous || (previous.powerW === null && previous.powerUpdatedAt === null)) return;
     this.state.devices[deviceId] = { ...previous, powerW: null, powerUpdatedAt: null, powerSource: null };
-    this.save();
   }
 
   recordDailyEnergy(deviceId, records, metadata = {}) {
