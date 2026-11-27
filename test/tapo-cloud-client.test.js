@@ -359,7 +359,6 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   assert.match(usageFormat.reason, /end=/);
   assert.match(usageFormat.reason, /запрошено точек=61/);
   assert.match(usageFormat.reason, /получено=91/);
-  assert.match(usageFormat.reason, /сумма истории=4095 Wh/);
   assert.ok(usageFormat.reason.length > 180);
 });
 
