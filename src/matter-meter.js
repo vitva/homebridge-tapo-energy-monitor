@@ -4,8 +4,8 @@ const PLUGIN_IDENTIFIER = 'homebridge-tapo-energy-monitor';
 const PLATFORM_NAME = 'TapoEnergyMonitor';
 const METER_ID = 'tapo-energy-estimated-total';
 const CLOUD_METER_ID = 'tapo-energy-cloud-total';
-// Matter epoch-s is seconds since 2000-01-01T00:00:00Z, not Unix epoch.
-const MATTER_EPOCH_UNIX_OFFSET_SECONDS = 946684800;
+// Matter ElectricalEnergyMeasurement epoch-s is validated as Unix seconds by Matter.js.
+const MIN_MATTER_EPOCH_SECONDS = 946684800;
 
 function createEstimatedMeterAccessory(api, displayName = 'Tapo Energy — Расчётная') {
   const matter = api && api.matter;
@@ -64,7 +64,7 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     return null;
   }
 
-  const timestamp = Math.max(0, Math.floor(Date.now() / 1000) - MATTER_EPOCH_UNIX_OFFSET_SECONDS);
+  const timestamp = Math.floor(Date.now() / 1000);
 
   return {
     UUID: matter.uuid.generate(CLOUD_METER_ID),
@@ -98,9 +98,9 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
       Number.isFinite(device.energyWh) && device.energyWh >= 0)
     .reduce((total, device) => total + device.energyWh, 0);
 
-  const timestamp = Math.floor(nowMs / 1000) - MATTER_EPOCH_UNIX_OFFSET_SECONDS;
-  if (timestamp < 0) {
-    throw new RangeError('Matter energy timestamps cannot be earlier than 2000-01-01T00:00:00Z.');
+  const timestamp = Math.floor(nowMs / 1000);
+  if (timestamp < MIN_MATTER_EPOCH_SECONDS) {
+    throw new RangeError('Matter energy timestamps must be Unix epoch seconds on or after 2000-01-01T00:00:00Z.');
   }
   const hasPrevious = previousReading &&
     Number.isFinite(previousReading.cumulativeEnergyWh) &&
@@ -110,7 +110,7 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
     : 0;
   const startTimestamp = hasPrevious && previousReading.timestamp < timestamp
     ? previousReading.timestamp
-    : Math.max(0, timestamp - 1);
+    : Math.max(MIN_MATTER_EPOCH_SECONDS, timestamp - 1);
 
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
