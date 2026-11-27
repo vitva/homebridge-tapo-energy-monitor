@@ -143,6 +143,8 @@ test('registers a separate real cloud energy meter for cloud mode', async () => 
   const matter = {
     uuid: { generate: value => 'uuid:' + value },
     deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
+    clusterNames: { ElectricalEnergyMeasurement: 'electricalEnergyMeasurement' },
+    getAccessoryState: async () => ({ cumulativeEnergyImported: { energy: 0, endTimestamp: 1800000000 } }),
     unregisterPlatformAccessories: async (...args) => unregistered.push(args),
     registerPlatformAccessories: async (...args) => registered.push(args)
   };
@@ -166,6 +168,27 @@ test('registers a separate real cloud energy meter for cloud mode', async () => 
   assert.equal(platform.matterMeterUuid, null);
 });
 
+
+test('does not remove the estimated meter when Matter registration resolves but endpoint state is missing', async () => {
+  const unregistered = [];
+  const warnings = [];
+  const matter = {
+    uuid: { generate: value => 'uuid:' + value },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
+    registerPlatformAccessories: async () => {},
+    getAccessoryState: async () => undefined,
+    unregisterPlatformAccessories: async (...args) => unregistered.push(args)
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.log.warn = message => warnings.push(message);
+
+  await platform.registerCloudMatterMeter();
+
+  assert.equal(platform.cloudMatterMeterUuid, null);
+  assert.equal(unregistered.length, 0);
+  assert.ok(platform.cloudMatterRegistrationRetryAt > Date.now());
+  assert.match(warnings[0], /endpoint\/cluster is not available/);
+});
 
 test('keeps the previous estimated meter when cloud Matter registration fails', async () => {
   const unregistered = [];
@@ -275,7 +298,7 @@ test('restores the previous cumulative Matter reading after a plugin restart', a
     getAccessoryState: async (uuid, cluster) => {
       assert.equal(uuid, 'cloud-meter-uuid');
       assert.equal(cluster, 'electricalEnergyMeasurement');
-      return { cumulativeEnergyImported: { energy: 125500, endTimestamp: 853315200 } };
+      return { cumulativeEnergyImported: { energy: 125500, endTimestamp: 1800000000 } };
     }
   };
   const { platform } = makePlatform({}, matter);
@@ -283,14 +306,14 @@ test('restores the previous cumulative Matter reading after a plugin restart', a
 
   const restored = await platform.restoreCloudMatterLastReading();
 
-  assert.deepEqual(restored, { cumulativeEnergyWh: 125.5, timestamp: 853315200 });
+  assert.deepEqual(restored, { cumulativeEnergyWh: 125.5, timestamp: 1800000000 });
   assert.deepEqual(platform.cloudMatterLastReading, restored);
 });
 
 test('does not turn a fresh zero-valued Matter endpoint into a fake historical interval', async () => {
   const matter = {
     getAccessoryState: async () => ({
-      cumulativeEnergyImported: { energy: 0, endTimestamp: 853315200 }
+      cumulativeEnergyImported: { energy: 0, endTimestamp: 1800000000 }
     })
   };
   const { platform } = makePlatform({}, matter);
