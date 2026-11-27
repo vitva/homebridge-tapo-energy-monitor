@@ -111,8 +111,8 @@ jobs:
           }
           JSON
           set +e
-          timeout 25s ./node_modules/.bin/homebridge \\
-            -U "$RUNNER_TEMP/homebridge-matter-data" \\
+          timeout 25s ./node_modules/.bin/homebridge \
+            -U "$RUNNER_TEMP/homebridge-matter-data" \
             > "$RUNNER_TEMP/homebridge-matter-runtime.log" 2>&1
           MATTER_EXIT_CODE=$?
           set -e
@@ -122,7 +122,7 @@ jobs:
             exit 1
           fi
           grep -q "Matter virtual energy sensor registered" "$RUNNER_TEMP/homebridge-matter-runtime.log"
-          grep -q "\\[MATTER SIMULATION\\]" "$RUNNER_TEMP/homebridge-matter-runtime.log"
+          grep -q "\[MATTER SIMULATION\]" "$RUNNER_TEMP/homebridge-matter-runtime.log"
       - if: matrix.node-version == 26
         run: mkdir -p artifacts && npm pack --pack-destination artifacts
       - if: matrix.node-version == 26
