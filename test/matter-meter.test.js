@@ -69,7 +69,7 @@ test('creates a distinct cloud Electrical Meter with required power cluster and 
   assert.deepEqual(accessory.clusters.electricalPowerMeasurement, { activePower: null });
   assert.equal(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.energy, 0);
   assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.endTimestamp));
-  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.energy, 0);
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, null);
   assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.startTimestamp));
   assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.endTimestamp));
 });
@@ -126,33 +126,75 @@ test('rejects Matter timestamps before the supported Unix epoch minimum', async 
   assert.equal(updates.length, 0);
 });
 
-test('publishes the change since the previous cloud poll as periodic imported energy', async () => {
+test('publishes the verified current-day cloud bucket as periodic imported energy', async () => {
   const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: {
-      cloudA: { source: 'tapo_cloud', energyWh: 735.25 }
-    }
-  }, { cumulativeEnergyWh: 730, timestamp: 1800000000 }, 1_800_000_900_000);
-
-  assert.deepEqual(result, {
-    cumulativeEnergyWh: 735.25,
-    periodicEnergyWh: 5.25,
-    timestamp: 1800000900
-  });
-  assert.deepEqual(updates[0], [
-    'cloud-meter-uuid',
-    'electricalEnergyMeasurement',
-    {
-      cumulativeEnergyImported: { energy: 735250, endTimestamp: 1800000900 },
-      periodicEnergyImported: {
-        energy: 5250,
-        startTimestamp: 1800000000,
-        endTimestamp: 1800000900
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 735.25, timeZone: 'UTC',
+        energyByDay: { '2027-01-15': 5.25 }
+      },
+      cloudB: {
+        source: 'tapo_cloud', active: true, energyWh: 100, timeZone: 'UTC',
+        energyByDay: { '2027-01-15': 2.75 }
       }
     }
-  ]);
+  }, { cumulativeEnergyWh: 700, timestamp: 1799990000 }, nowMs);
+
+  assert.deepEqual(result, {
+    cumulativeEnergyWh: 835.25,
+    periodicEnergyWh: 8,
+    timestamp: 1800000000,
+    dateKey: '2027-01-15',
+    timeZone: 'UTC'
+  });
+  assert.deepEqual(updates[0][2], {
+    cumulativeEnergyImported: { energy: 835250, endTimestamp: 1800000000 },
+    periodicEnergyImported: {
+      energy: 8000,
+      startTimestamp: Date.UTC(2027, 0, 15) / 1000,
+      endTimestamp: 1800000000
+    }
+  });
 });
 
+test('does not publish a fabricated daily value when any active cloud device has no verified bucket', async () => {
+  const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 735.25, timeZone: 'UTC',
+        energyByDay: { '2027-01-15': 5.25 }
+      },
+      cloudB: {
+        source: 'tapo_cloud', active: true, energyWh: 100, timeZone: 'UTC',
+        energyByDay: {}
+      }
+    }
+  }, null, nowMs);
+
+  assert.equal(result.periodicEnergyWh, null);
+  assert.equal(updates[0][2].periodicEnergyImported, null);
+});
+
+test('uses the device timezone when calculating the current-day period start', async () => {
+  const { api, updates } = mockApi();
+  const nowMs = Date.UTC(2027, 0, 15, 8, 0, 0);
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      cloudA: {
+        source: 'tapo_cloud', active: true, energyWh: 10, timeZone: 'Europe/Moscow',
+        energyByDay: { '2027-01-15': 10 }
+      }
+    }
+  }, null, nowMs);
+
+  assert.equal(result.dateKey, '2027-01-15');
+  assert.equal(result.periodicEnergyWh, 10);
+  assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, Date.UTC(2027, 0, 14, 21, 0, 0) / 1000);
+});
 test('does not publish a negative periodic delta when cloud totals are corrected down', async () => {
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
