@@ -38,12 +38,11 @@ jobs:
       - name: Install npm CLI with staged publishing support
         run: npm install --global npm@11.21.3
       - name: Preflight npm version and staged candidates
-        env:
-          PACKAGE_NAME: ${{ github.event.repository.name }}
-          PACKAGE_VERSION: ${{ fromJSON('{"version":"0.2.0-beta.15"}').version }}
         run: |
           set -euo pipefail
-          echo "Checking published version..."
+          PACKAGE_NAME="$(node -p "require('./package.json').name")"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          echo "Checking published version $PACKAGE_NAME@$PACKAGE_VERSION..."
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
             echo "Version $PACKAGE_NAME@$PACKAGE_VERSION already exists in the public registry; refusing to stage." >&2
             exit 1
