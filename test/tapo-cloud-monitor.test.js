@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const util = require('node:util');
 const { EnergyStore } = require('../src/energy-store');
 const { TapoCloudEnergyMonitor } = require('../src/tapo-cloud-monitor');
 
@@ -14,7 +15,7 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
   const requestedRanges = [];
   const infoMessages = [];
   const monitor = new TapoCloudEnergyMonitor({
-    log: { info(message, ...args) { infoMessages.push([message, ...args].join(' ')); }, warn() {}, error() {} },
+    log: { info(message, ...args) { infoMessages.push(util.format(message, ...args)); }, warn() {}, error() {} },
     username: 'user@example.com',
     password: 'secret',
     auth: {
