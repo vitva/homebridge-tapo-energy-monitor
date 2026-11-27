@@ -73,6 +73,7 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     // This test accessory publishes only verified imported energy. Current W is
     // deliberately omitted because the cloud power-history endpoints returned no samples.
     clusters: {
+      electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: { cumulativeEnergyImported: { energy: 0 } }
     }
   };
