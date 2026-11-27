@@ -105,8 +105,8 @@
       const cloudHistory = activeDevices.some(device => device.source === 'tapo_cloud');
       const primaryCloudDevice = activeDevices.find(device => device.source === 'tapo_cloud' && device.latestDate);
       const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
-      // Period totals retain valid history from archived devices. Use the same
-      // complete device set for combined energy, while live power stays active-only.
+      // Combined cloud totals use active devices only; archived contributions
+      // are displayed separately below without being added to account totals.
       const todayWh = cloudHistory
         ? activeDevices.reduce((sum, device) => sum + Number(device.totals?.daily?.[todayKey] || 0), 0)
         : (data.totals?.daily?.[todayKey] || 0);
