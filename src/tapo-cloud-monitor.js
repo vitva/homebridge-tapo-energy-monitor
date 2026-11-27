@@ -93,6 +93,10 @@ class TapoCloudEnergyMonitor {
         this.log.warn('Tapo daily energy history format was not recognized for %s.', device.name);
         continue;
       }
+      if (history.meta.lastRecordMatchesLocalDate !== true) {
+        this.log.warn('Tapo history date alignment is not verified for %s; this response was not imported.', device.name);
+        continue;
+      }
       store.recordDailyEnergy(device.id, history.records, {
         name: device.name,
         model: device.model
