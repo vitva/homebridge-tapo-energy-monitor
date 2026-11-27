@@ -187,7 +187,7 @@ test('does not remove the estimated meter when Matter registration resolves but 
   assert.equal(platform.cloudMatterMeterUuid, null);
   assert.equal(unregistered.length, 0);
   assert.ok(platform.cloudMatterRegistrationRetryAt > Date.now());
-  assert.match(warnings[0], /endpoint\/cluster is not available/);
+  assert.match(warnings[0], /endpoint\/cluster state is unavailable/);
 });
 
 test('keeps the previous estimated meter when cloud Matter registration fails', async () => {
