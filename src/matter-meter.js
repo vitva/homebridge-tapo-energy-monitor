@@ -35,12 +35,14 @@ async function updateEstimatedMeter(api, uuid, summary) {
   }
 
   const devices = Object.values((summary && summary.devices) || {});
+  // Power is an instantaneous reading, so only currently active devices contribute.
   const activePowerW = devices
     .filter(device => device && device.active === true)
     .reduce((total, device) => total + (Number.isFinite(device.powerW) ? device.powerW : 0), 0);
+  // Energy is cumulative history: retain contributions from inactive/removed devices.
   const cumulativeEnergyWh = devices
-    .filter(device => device && device.active === true)
-    .reduce((total, device) => total + (Number.isFinite(device.energyWh) ? device.energyWh : 0), 0);
+    .filter(device => device && Number.isFinite(device.energyWh) && device.energyWh >= 0)
+    .reduce((total, device) => total + device.energyWh, 0);
 
   // Matter ElectricalPowerMeasurement uses mW; ElectricalEnergyMeasurement uses mWh.
   const powerCluster = matter.clusterNames?.ElectricalPowerMeasurement || 'electricalPowerMeasurement';
