@@ -143,10 +143,13 @@ test('registers a separate real cloud energy meter for cloud mode', async () => 
   const matter = {
     uuid: { generate: value => 'uuid:' + value },
     deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
+    unregisterPlatformAccessories: async (...args) => unregistered.push(args),
     registerPlatformAccessories: async (...args) => registered.push(args)
   };
   const { platform } = makePlatform({}, matter);
-  platform.api.unregisterPlatformAccessories = async (...args) => unregistered.push(args);
+  platform.api.unregisterPlatformAccessories = async () => {
+    throw new Error('HAP unregister API must not be used for Matter accessories');
+  };
   await platform.registerCloudMatterMeter();
 
   assert.equal(unregistered.length, 1);
