@@ -2,8 +2,8 @@
   "pluginAlias": "TapoEnergyMonitor",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Tapo energy monitoring. Simulation is opt-in; the platform stays idle until at least one simulated device is configured. Cloud diagnostics are read-only and are not yet connected to live aggregation.",
-  "footerDisplay": "History is stored only in the Homebridge storage directory. Tapo account credentials entered for a cloud diagnostic are not saved in plugin settings.",
+  "headerDisplay": "Tapo Energy Monitor imports daily P110M energy history from Tapo Cloud when account credentials are configured. Simulation remains optional.",
+  "footerDisplay": "Tapo email and password are saved in the Homebridge config.json for automatic re-authentication. The password is stored in plain text. MFA codes are never saved.",
   "schema": {
     "type": "object",
     "properties": {
@@ -16,13 +16,13 @@
         "title": "Simulation mode",
         "type": "boolean",
         "default": false,
-        "description": "Enable only to run an explicit simulation. The platform stays idle by default."
+        "description": "Enable only to run an explicit simulation. Leave off to collect real P110M daily history from Tapo Cloud using the saved account credentials."
       },
       "enableMatterMeter": {
         "title": "Publish Matter Electrical Meter",
         "type": "boolean",
         "default": true,
-        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes an Electrical Meter device with estimated totals only; real Tapo counters will be kept separate."
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes the estimated Matter meter in simulation mode only. Live cloud history is stored in the dashboard and is not exported as a Matter meter yet."
       },
       "matterMeterName": {
         "title": "Matter meter name",
@@ -30,9 +30,9 @@
         "default": "Tapo Energy — Расчётная"
       },
       "pollingIntervalSeconds": {
-        "title": "Polling interval (seconds)",
+        "title": "Cloud/simulation polling interval (seconds)",
         "type": "integer",
-        "default": 60,
+        "default": 900,
         "minimum": 30,
         "maximum": 3600
       },
@@ -78,11 +78,17 @@
           ]
         }
       },
-      "tapoCloudPython": {
-        "title": "Python executable for Tapo cloud",
+      "tapoCloudUsername": {
+        "title": "Tapo account email",
         "type": "string",
-        "default": "python3",
-        "description": "Use python3 or an absolute path to a Python 3.10+ virtual-environment interpreter."
+        "format": "email",
+        "description": "Saved in Homebridge config.json and reused for cloud authentication."
+      },
+      "tapoCloudPassword": {
+        "title": "Tapo account password",
+        "type": "string",
+        "format": "password",
+        "description": "Stored in plain text in Homebridge config.json. Keep the file and backups private."
       }
     },
     "required": [
