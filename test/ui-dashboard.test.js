@@ -32,7 +32,7 @@ function createElement() {
 
 async function renderDashboard(data) {
   const html = fs.readFileSync(path.join(__dirname, '..', 'homebridge-ui', 'public', 'index.html'), 'utf8');
-  const script = html.match(/<script>([\\s\\S]*?)<\\/script>/);
+  const script = html.match(/<script>([\s\S]*?)<\/script>/);
   assert.ok(script, 'dashboard script must exist');
 
   const elements = new Map();
