@@ -90,12 +90,6 @@
         "format": "password",
         "description": "Stored in plain text in Homebridge config.json. Keep the file and backups private."
       },
-      "tapoCloudPython": {
-        "title": "Python executable for Tapo cloud",
-        "type": "string",
-        "default": "python3",
-        "description": "Use python3 or an absolute path to a Python 3.10+ virtual-environment interpreter."
-      }
     },
     "required": [
       "name",
