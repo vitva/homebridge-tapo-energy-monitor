@@ -16,13 +16,13 @@
         "title": "Simulation mode",
         "type": "boolean",
         "default": false,
-        "description": "Enable only to run an explicit simulation. The platform stays idle by default."
+        "description": "Enable only to run an explicit simulation. Leave off to collect real P110M daily history from Tapo Cloud using the saved account credentials."
       },
       "enableMatterMeter": {
         "title": "Publish Matter Electrical Meter",
         "type": "boolean",
         "default": true,
-        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes an Electrical Meter device with estimated totals only; real Tapo counters will be kept separate."
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes the estimated Matter meter in simulation mode only. Live cloud history is stored in the dashboard and is not exported as a Matter meter yet."
       },
       "matterMeterName": {
         "title": "Matter meter name",
@@ -32,7 +32,7 @@
       "pollingIntervalSeconds": {
         "title": "Cloud/simulation polling interval (seconds)",
         "type": "integer",
-        "default": 60,
+        "default": 900,
         "minimum": 30,
         "maximum": 3600
       },
