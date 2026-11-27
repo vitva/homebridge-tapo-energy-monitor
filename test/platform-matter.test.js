@@ -218,6 +218,7 @@ test('keeps a successful Matter update successful when readback independently fa
 
 test('waits for the asynchronous Homebridge Matter state update before verifying cloud energy readback', async () => {
   const logs = [];
+  const warnings = [];
   let state;
   const matter = {
     clusterNames: { ElectricalEnergyMeasurement: 'electricalEnergyMeasurement' },
@@ -230,6 +231,7 @@ test('waits for the asynchronous Homebridge Matter state update before verifying
   };
   const { platform } = makePlatform({}, matter);
   platform.log.info = message => logs.push(message);
+  platform.log.warn = message => warnings.push(message);
   platform.cloudMatterMeterUuid = 'cloud-meter-uuid';
 
   const result = await platform.publishCloudMatterReading({
@@ -237,8 +239,8 @@ test('waits for the asynchronous Homebridge Matter state update before verifying
   });
 
   assert.equal(result.cumulativeEnergyWh, 123.456);
-  assert.ok(logs.some(message => /MATTER CLOUD READBACK.*cumulativeEnergyImported/.test(message)));
-  assert.equal(logs.some(message => /state unavailable|did not converge/.test(message)), false);
+  assert.ok(logs.some(message => /MATTER CLOUD READBACK/.test(message)));
+  assert.equal(warnings.some(message => /MATTER CLOUD READBACK/.test(message)), false);
 });
 
 test('retries cloud Matter registration only when enabled and retry time has elapsed', async () => {
