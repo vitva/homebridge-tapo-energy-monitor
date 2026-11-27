@@ -21,6 +21,10 @@ test('initializes cloud dashboard state before reading it', () => {
     'cloudHistory must be initialized before todayWh reads it');
   assert.ok(refresh.includes('latestCommonDate'),
     'cloud dashboard must fall back to the latest date complete across active devices');
+  const monthKey = refresh.indexOf('const monthKey =');
+  const monthRender = refresh.indexOf("byId('month').textContent");
+  assert.ok(monthKey >= 0 && monthKey < monthRender,
+    'reporting period keys must be initialized before monthly values render');
   assert.ok(refresh.includes("byId('month').textContent") && refresh.includes("byId('year').textContent"),
     'cloud dashboard must expose monthly and yearly totals without requiring a daily bucket');
   assert.ok(html.includes('id="month"') && html.includes('id="year"'),
