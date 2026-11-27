@@ -659,7 +659,7 @@ test('marks a trailing zero tail as unverified when the monthly counter proves m
     { date: '2026-11-03', value: 0 }
   ];
   const monthly = [{ month: '2026-11', value: 8500 }];
-  assert.equal(findUnverifiedDailyTailStart(records, monthly, '2026-11'), '2026-11-01');
+  assert.equal(findUnverifiedDailyTailStart(records, monthly), '2026-11-01');
 });
 
 test('does not reject zero daily buckets when they agree with the monthly total', () => {
@@ -668,7 +668,7 @@ test('does not reject zero daily buckets when they agree with the monthly total'
     { date: '2026-11-02', value: 0 },
     { date: '2026-11-03', value: 0 }
   ];
-  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 1200 }], '2026-11'), null);
+  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 1200 }]), null);
 });
 
 test('does not reject a daily history whose final day has a non-zero value', () => {
@@ -676,5 +676,21 @@ test('does not reject a daily history whose final day has a non-zero value', () 
     { date: '2026-11-01', value: 1200 },
     { date: '2026-11-02', value: 500 }
   ];
-  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 5000 }], '2026-11'), null);
+  assert.equal(findUnverifiedDailyTailStart(records, [{ month: '2026-11', value: 5000 }]), null);
+});
+
+
+test('finds the earliest stale daily tail across all months with authoritative monthly totals', () => {
+  const records = [
+    { date: '2026-10-24', value: 3100 },
+    { date: '2026-10-25', value: 0 },
+    { date: '2026-10-26', value: 0 },
+    { date: '2026-11-01', value: 0 },
+    { date: '2026-11-02', value: 0 }
+  ];
+  const monthly = [
+    { month: '2026-10', value: 42000 },
+    { month: '2026-11', value: 8500 }
+  ];
+  assert.equal(findUnverifiedDailyTailStart(records, monthly), '2026-10-25');
 });

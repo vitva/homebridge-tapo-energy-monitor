@@ -130,9 +130,8 @@ class TapoCloudEnergyMonitor {
       } else if (history.meta.lastRecordMatchesLocalDate !== true) {
         this.log.warn('Tapo history date alignment is not verified for %s; daily records were not imported.', device.name);
       } else {
-        const currentMonth = (history.meta.localDate || history.meta.lastDate || '').slice(0, 7);
         const invalidFromDate = findUnverifiedDailyTailStart(
-          history.records, monthlyHistory?.records || [], currentMonth
+          history.records, monthlyHistory?.records || []
         );
         const records = invalidFromDate
           ? history.records.filter(record => record.date < invalidFromDate)
