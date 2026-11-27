@@ -410,7 +410,7 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.meta.timeZone, 'Europe/Moscow');
   assert.equal(parsed.meta.startTimestamp, 1790456400);
   assert.equal(parsed.meta.endTimestamp, 1795726800);
-  assert.equal(parsed.meta.alignmentVerified, false);
+  assert.equal(parsed.meta.alignmentVerified, true);
   assert.equal(parsed.records[58].date, '2026-10-25');
   assert.equal(parsed.records[86].date, '2026-11-22');
 });
