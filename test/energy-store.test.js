@@ -220,3 +220,27 @@ test('excludes archived cloud devices from combined totals but retains their per
     assert.equal(summary.totals.yearly['2026'], 5000);
   });
 });
+
+
+test('removes previously imported zero tail buckets when monthly totals prove the daily tail is stale', () => {
+  withStore(store => {
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-10-30', value: 120 },
+      { date: '2026-10-31', value: 80 },
+      { date: '2026-11-01', value: 0 },
+      { date: '2026-11-02', value: 0 },
+      { date: '2026-11-03', value: 0 }
+    ], { latestDate: '2026-11-03' });
+
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-10-30', value: 120 },
+      { date: '2026-10-31', value: 80 }
+    ], { latestDate: '2026-11-03', invalidFromDate: '2026-11-01' });
+
+    const summary = store.getSummary();
+    assert.equal(summary.devices['cloud-p110m'].totals.daily['2026-10-30'], 120);
+    assert.equal(summary.devices['cloud-p110m'].totals.daily['2026-10-31'], 80);
+    assert.equal(Object.hasOwn(summary.devices['cloud-p110m'].totals.daily, '2026-11-01'), false);
+    assert.equal(Object.hasOwn(summary.devices['cloud-p110m'].totals.daily, '2026-11-03'), false);
+  });
+});
