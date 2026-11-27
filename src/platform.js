@@ -253,9 +253,9 @@ class TapoEnergyMonitorPlatform {
         this.cloudMatterMeterUuid);
       return null;
     } catch (error) {
-      this.log.warn('[MATTER CLOUD RESTORE] %s | could not restore previous reading: %s',
+      this.log.warn('[MATTER CLOUD RESTORE] %s | Matter endpoint state could not be verified: %s',
         this.cloudMatterMeterUuid, error.message);
-      return null;
+      return undefined;
     }
   }
 
