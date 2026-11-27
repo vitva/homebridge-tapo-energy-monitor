@@ -325,7 +325,9 @@ function findElectricalCandidates(payload) {
       visited += 1;
       const childPath = path ? path + '.' + key : key;
       const matched = insideCandidate || electricalKey.test(key);
-      if (matched && (typeof child === 'number' || typeof child === 'boolean' ||
+      const valueKey = /^(value|raw|unit|scale|measurement|reading|status|enabled)$/i.test(key);
+      if (matched && (!insideCandidate || valueKey) &&
+          (typeof child === 'number' || typeof child === 'boolean' ||
           (typeof child === 'string' && child.length <= 48))) {
         candidates.push(childPath + '=' + JSON.stringify(child));
       } else if (child && typeof child === 'object') {
