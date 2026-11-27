@@ -193,7 +193,7 @@
     }
   }
 
-  let platformAlias = 'TapoEnergyMonitor';
+  const platformAlias = 'TapoEnergyMonitor';
 
   function findPlatformConfig(config) {
     if (!Array.isArray(config)) return -1;
@@ -205,10 +205,6 @@
 
   async function init() {
     try {
-      const schema = await homebridge.getPluginConfigSchema();
-      if (schema && typeof schema.pluginAlias === 'string' && schema.pluginAlias) {
-        platformAlias = schema.pluginAlias;
-      }
       const config = await homebridge.getPluginConfig();
       const index = findPlatformConfig(config);
       const platform = index >= 0 ? config[index] : null;
@@ -295,10 +291,6 @@
     const password = byId('tapo-password').value;
     if (!username || !password) throw new Error('Укажите email и пароль аккаунта Tapo.');
 
-    const schema = await homebridge.getPluginConfigSchema();
-    if (schema && typeof schema.pluginAlias === 'string' && schema.pluginAlias) {
-      platformAlias = schema.pluginAlias;
-    }
     const config = await homebridge.getPluginConfig();
     const index = findPlatformConfig(config);
     if (index < 0) {
