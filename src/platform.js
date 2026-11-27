@@ -113,11 +113,23 @@ class TapoEnergyMonitorPlatform {
       username, password, log: this.log,
       termId: getStableTapoTermId(storageRoot)
     });
+    await this.registerMatterMeter();
     const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
     const interval = Math.max(300, Math.min(3600, configuredInterval));
     const poll = async () => {
       try {
         const result = await this.cloudMonitor.poll(this.store);
+        if (this.matterMeterUuid) {
+          try {
+            const meter = await updateEstimatedMeter(this.api, this.matterMeterUuid, this.store.getSummary());
+            if (meter) {
+              this.log.info('[MATTER CLOUD] estimated meter: %s W | cumulative cloud energy: %s Wh',
+                meter.activePowerW.toFixed(1), meter.cumulativeEnergyWh.toFixed(2));
+            }
+          } catch (error) {
+            this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);
+          }
+        }
         this.log.info('[TAPO CLOUD] %s P110M devices found; %s histories updated.',
           result.deviceCount, result.importedDevices);
       } catch (error) {
