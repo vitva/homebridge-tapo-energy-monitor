@@ -160,14 +160,14 @@ class TapoEnergyMonitorPlatform {
       return;
     }
 
-    const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
-    if (!accessory) {
-      this.cloudMatterRegistrationRetryAt = Number.MAX_SAFE_INTEGER;
-      this.log.warn('Cloud Matter meter not registered. Homebridge 2.5.0 or later with Electrical Meter support is required.');
-      return;
-    }
-
     try {
+      const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
+      if (!accessory) {
+        this.cloudMatterRegistrationRetryAt = Number.MAX_SAFE_INTEGER;
+        this.log.warn('Cloud Matter meter not registered. Homebridge 2.5.0 or later with Electrical Meter support is required.');
+        return;
+      }
+
       // Homebridge resolves this promise only after the endpoint is registered and ready
       // for updates. Restored Matter accessories must be registered again on every start.
       await matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
