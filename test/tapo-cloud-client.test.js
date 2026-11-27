@@ -598,7 +598,10 @@ test('performs a second read-only usage request from the quarter boundary', asyn
   assert.match(comparison.reason, /2026-11-26 23:44:26/);
   assert.match(comparison.reason, /ненулевые совпадения=3\/3/);
   assert.match(comparison.reason, /samples=/);
-  assert.match(comparison.reason, /суммы=60\/60 Wh/);
-  assert.match(comparison.reason, /разница=0 Wh/);
+  assert.match(comparison.reason, /суммы полных ответов=60\/60 Wh/);
+  assert.match(comparison.reason, /пересечение дат=.* \(5\)/);
+  assert.match(comparison.reason, /суммы пересечения=60\/60 Wh/);
+  assert.match(comparison.reason, /разница пересечения=0 Wh/);
+  assert.match(comparison.reason, /различий по дням=0/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
 });
