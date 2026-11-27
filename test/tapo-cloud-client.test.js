@@ -363,6 +363,49 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   assert.ok(usageFormat.reason.length > 180);
 });
 
+test('reports summary counters and trailing zero daily buckets separately', async () => {
+  const result = await probeTapoThingCloud({
+    username: 'user@example.com',
+    password: 'local-only',
+    auth: {
+      async login() { return { ok: true, token: 't', termId: 'term' }; },
+      async discoverThingService() { return 'https://eu-app-server.iot.i.tplinkcloud.com'; }
+    },
+    apiFactory: () => ({
+      async listThings() { return [{ thingName: 'p1', model: 'P110M' }]; },
+      async getThingResource(_id, resource) {
+        return resource === 'settings' ? { region: 'Europe/Moscow' } : {};
+      },
+      async getShadows() { return { shadows: [] }; },
+      async getUsage(_id, _host, range) {
+        const end = new Date(range.end_timestamp * 1000);
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
+        }).formatToParts(end);
+        const p = Object.fromEntries(parts.filter(x => x.type !== 'literal').map(x => [x.type, x.value]));
+        const values = Array(91).fill(0);
+        values[87] = 31;
+        return {
+          energy_usage: { energy_usage: { today_energy_mwh: 31060, month_energy_mwh: 604574 } },
+          energy_data: {
+            local_time: p.year + '-' + p.month + '-' + p.day + ' 12:00:00',
+            data: values,
+            start_timestamp: range.start_timestamp,
+            end_timestamp: range.end_timestamp,
+            interval: 1440
+          }
+        };
+      }
+    })
+  });
+  const counters = result.diagnostics.find(item => item.stage === 'usage_counters');
+  assert.ok(counters);
+  assert.match(counters.reason, /today=31060 mWh/);
+  assert.match(counters.reason, /month=604574 mWh/);
+  assert.match(counters.reason, /нулей в конце=3/);
+  assert.match(counters.reason, /последний ненулевой=.*:31 Wh/);
+});
+
 test('builds daily energy history timestamps in the device timezone across DST', () => {
   const now = Date.UTC(2026, 10, 26, 12, 0, 0);
   const range = buildDailyUsageRange('Europe/Helsinki', now, 60);
