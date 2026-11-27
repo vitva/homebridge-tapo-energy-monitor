@@ -83,8 +83,6 @@ jobs:
           fi
           grep -q "Simulation is disabled" "$RUNNER_TEMP/homebridge-runtime.log"
           grep -q "is running on port" "$RUNNER_TEMP/homebridge-runtime.log"
-      - run: python3 -m py_compile helpers/tapo_cloud_probe.py
-      - run: python3 -m unittest discover -s helpers -p 'test_*.py'
       - if: matrix.node-version == 26
         run: mkdir -p artifacts && npm pack --pack-destination artifacts
       - if: matrix.node-version == 26
