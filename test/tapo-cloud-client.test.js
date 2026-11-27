@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory, findUnverifiedDailyTailStart } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({

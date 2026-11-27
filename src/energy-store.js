@@ -97,18 +97,7 @@ class EnergyStore {
       energyByDay[record.date] = record.value;
       accepted += 1;
     }
-    const invalidFromDate = typeof metadata.invalidFromDate === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(metadata.invalidFromDate)
-      ? metadata.invalidFromDate : null;
-    const latestDate = typeof metadata.latestDate === 'string' &&
-      /^\d{4}-\d{2}-\d{2}$/.test(metadata.latestDate)
-      ? metadata.latestDate : null;
-    if (invalidFromDate && latestDate && invalidFromDate <= latestDate) {
-      for (const date of Object.keys(energyByDay)) {
-        if (date >= invalidFromDate && date <= latestDate) delete energyByDay[date];
-      }
-    }
-    if (!accepted && !invalidFromDate) return;
+    if (!accepted) return;
     const energyByMonth = { ...(previous.energyByMonth || {}) };
     // The daily endpoint covers the current quarter. Its latest day lets us
     // invalidate only that month's cached aggregate until a fresh monthly

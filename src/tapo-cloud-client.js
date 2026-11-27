@@ -191,29 +191,6 @@ function normalizeMonthlyEnergyHistory(payload, timeZone = 'UTC') {
   };
 }
 
-function findUnverifiedDailyTailStart(records, monthlyRecords, currentMonth) {
-  if (!Array.isArray(records) || !Array.isArray(monthlyRecords) ||
-      typeof currentMonth !== 'string' || !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(currentMonth)) return null;
-  const monthlyValue = monthlyRecords.find(record => record && record.month === currentMonth)?.value;
-  if (!Number.isFinite(monthlyValue) || monthlyValue <= 0) return null;
-  const monthRecords = records.filter(record =>
-    record && typeof record.date === 'string' && record.date.slice(0, 7) === currentMonth &&
-    Number.isFinite(record.value) && record.value >= 0);
-  if (!monthRecords.length) return null;
-  const dailySum = monthRecords.reduce((sum, record) => sum + record.value, 0);
-  if (monthlyValue <= dailySum) return null;
-  let lastNonZero = -1;
-  for (let index = monthRecords.length - 1; index >= 0; index -= 1) {
-    if (monthRecords[index].value > 0) {
-      lastNonZero = index;
-      break;
-    }
-  }
-  const firstTrailingZero = lastNonZero + 1;
-  if (firstTrailingZero >= monthRecords.length) return null;
-  return monthRecords[firstTrailingZero].date;
-}
-
 function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
   if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
@@ -631,4 +608,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory, findUnverifiedDailyTailStart };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory };
