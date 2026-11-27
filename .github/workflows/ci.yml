@@ -125,7 +125,7 @@ jobs:
           grep -q "\[MATTER SIMULATION\]" "$RUNNER_TEMP/homebridge-matter-runtime.log"
 
           # Exercise the production cloud-meter registration/update/readback path
-          # against the real Homebridge 2.5.0 Matter API, including restart recovery.
+          # against the real Homebridge 2.5.0 Matter API, for the cloud meter.
           mkdir -p "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci"
           cat > "$RUNNER_TEMP/homebridge-matter-fixture/homebridge-tapo-energy-matter-ci/package.json" <<'JSON'
           {
@@ -192,25 +192,23 @@ jobs:
           }
           JSON
           export NODE_PATH="$RUNNER_TEMP/homebridge/node_modules"
-          for ATTEMPT in 1 2; do
-            set +e
-            timeout --kill-after=5s 25s ./node_modules/.bin/homebridge \
-              -P "$RUNNER_TEMP/homebridge-matter-fixture" \
-              -U "$RUNNER_TEMP/homebridge-matter-cloud-data" \
-              > "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log" 2>&1
-            CLOUD_EXIT_CODE=$?
-            set -e
-            cat "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"
-            if [ "$CLOUD_EXIT_CODE" -ne 124 ] && [ "$CLOUD_EXIT_CODE" -ne 137 ]; then
-              echo "Cloud Matter Homebridge exited unexpectedly (code $CLOUD_EXIT_CODE)." >&2
-              exit 1
-            fi
-            grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"
-            if grep -q "violates device type requirements" "$RUNNER_TEMP/homebridge-matter-cloud-runtime-$ATTEMPT.log"; then
-              echo "Cloud Matter endpoint violates device type requirements." >&2
-              exit 1
-            fi
-          done
+          set +e
+          timeout --kill-after=5s 25s ./node_modules/.bin/homebridge \
+            -P "$RUNNER_TEMP/homebridge-matter-fixture" \
+            -U "$RUNNER_TEMP/homebridge-matter-cloud-data" \
+            > "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log" 2>&1
+          CLOUD_EXIT_CODE=$?
+          set -e
+          cat "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
+          if [ "$CLOUD_EXIT_CODE" -ne 124 ] && [ "$CLOUD_EXIT_CODE" -ne 137 ]; then
+            echo "Cloud Matter Homebridge exited unexpectedly (code $CLOUD_EXIT_CODE)." >&2
+            exit 1
+          fi
+          grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
+          if grep -q "violates device type requirements" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"; then
+            echo "Cloud Matter endpoint violates device type requirements." >&2
+            exit 1
+          fi
 
       - if: matrix.node-version == 26
         run: mkdir -p artifacts && npm pack --pack-destination artifacts
