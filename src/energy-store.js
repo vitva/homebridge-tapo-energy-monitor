@@ -36,6 +36,8 @@ class EnergyStore {
       };
       for (const device of Object.values(this.state.devices)) {
         device.totals = device.totals || emptyTotals();
+        device.energyByDay = device.energyByDay || {};
+        device.energyByMonth = device.energyByMonth || {};
         device.energyWh = Number.isFinite(device.energyWh) ? device.energyWh : 0;
       }
     } catch (error) {
