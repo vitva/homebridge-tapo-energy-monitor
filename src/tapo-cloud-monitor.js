@@ -184,7 +184,8 @@ class TapoCloudEnergyMonitor {
         invalidFromDate || 'no');
     }
     const summary = store.getSummary();
-    const monthKey = new Date().toISOString().slice(0, 7);
+    const monthKey = Object.keys(summary.totals.monthly || {}).sort().at(-1) ||
+      new Date().toISOString().slice(0, 7);
     this.log.info('[TAPO CLOUD DATA] combined store: %s active devices; %s daily dates; %s monthly periods; current month %s Wh; current year %s Wh.',
       this.devices.length,
       Object.keys(summary.totals.daily || {}).length,
