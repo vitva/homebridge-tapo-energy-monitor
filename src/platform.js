@@ -2,6 +2,7 @@
 
 const { EnergyStore } = require('./energy-store');
 const { TapoCloudEnergyMonitor } = require('./tapo-cloud-monitor');
+const { getStableTapoTermId } = require('./tapo-cloud-identity');
 const {
   PLUGIN_IDENTIFIER,
   PLATFORM_NAME,
@@ -108,7 +109,10 @@ class TapoEnergyMonitorPlatform {
   async startCloudMonitor(username, password) {
     const storageRoot = this.api.user.storagePath();
     this.store = new EnergyStore(storageRoot, this.log);
-    this.cloudMonitor = new TapoCloudEnergyMonitor({ username, password, log: this.log });
+    this.cloudMonitor = new TapoCloudEnergyMonitor({
+      username, password, log: this.log,
+      termId: getStableTapoTermId(storageRoot)
+    });
     const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
     const interval = Math.max(300, Math.min(3600, configuredInterval));
     const poll = async () => {
