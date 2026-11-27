@@ -308,13 +308,51 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   };
 }
 
+function findElectricalCandidates(payload) {
+  const candidates = [];
+  const electricalKey = /(?:^|[_-])(power|watt|watts|current|current_ma|current_a|voltage|voltage_mv|voltage_v|load)(?:$|[_-])/i;
+  let visited = 0;
+  const visit = (value, path = '', depth = 0, insideCandidate = false) => {
+    if (depth > 10 || value === null || typeof value !== 'object' || visited > 2000 ||
+        candidates.length >= 20) return;
+    if (Array.isArray(value)) {
+      for (let index = 0; index < Math.min(value.length, 100); index += 1) {
+        visit(value[index], path + '[' + index + ']', depth + 1, insideCandidate);
+      }
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      visited += 1;
+      const childPath = path ? path + '.' + key : key;
+      const matched = insideCandidate || electricalKey.test(key);
+      if (matched && (typeof child === 'number' || typeof child === 'boolean' ||
+          (typeof child === 'string' && child.length <= 48))) {
+        candidates.push(childPath + '=' + JSON.stringify(child));
+      } else if (child && typeof child === 'object') {
+        visit(child, childPath, depth + 1, matched);
+      }
+      if (visited > 2000 || candidates.length >= 20) break;
+    }
+  };
+  visit(payload);
+  return candidates;
+}
+
 function summarizeCloudResource(kind, payload) {
   if (!payload || typeof payload !== 'object') return 'Ответ получен; структура не распознана.';
   if (kind === 'shadows' || kind === 'matter_shadows') {
     const shadows = Array.isArray(payload.shadows) ? payload.shadows : [];
     const reported = shadows[0]?.state?.reported;
     const fields = reported && typeof reported === 'object' ? Object.keys(reported).slice(0, 30) : [];
-    return fields.length ? 'Поля reported: ' + fields.join(', ') : 'Ответ получен; reported-состояние не найдено.';
+    const electrical = findElectricalCandidates(payload);
+    return (fields.length ? 'Поля reported: ' + fields.join(', ') : 'reported-состояние не найдено.') +
+      '; электрические кандидаты: ' + (electrical.join(', ') || 'не найдены');
+  }
+  if (kind === 'rt-info') {
+    const fields = Object.keys(payload).slice(0, 30);
+    const electrical = findElectricalCandidates(payload);
+    return 'Поля rt-info: ' + fields.join(', ') +
+      '; электрические кандидаты: ' + (electrical.join(', ') || 'не найдены');
   }
   if (kind === 'model') {
     const services = new Set();
