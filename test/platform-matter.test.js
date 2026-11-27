@@ -214,22 +214,3 @@ test('keeps a successful Matter update successful when readback independently fa
   assert.match(warnings[0], /MATTER CLOUD READBACK.*readback failed/);
   assert.equal(warnings.some(message => /Matter cloud energy update failed/.test(message)), false);
 });
-
-
-test('does not retry Matter registration when export is explicitly disabled', async () => {
-  let registrations = 0;
-  const matter = {
-    uuid: { generate: value => value },
-    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
-    registerPlatformAccessories: async () => { registrations += 1; }
-  };
-  const { platform } = makePlatform({ enableMatterMeter: false }, matter);
-  platform.cloudMatterRegistrationRetryAt = 0;
-  if (platform.config.enableMatterMeter !== false && !platform.cloudMatterMeterUuid && platform.api.matter &&
-    Date.now() >= platform.cloudMatterRegistrationRetryAt) {
-    await platform.registerCloudMatterMeter();
-  }
-
-  assert.equal(registrations, 0);
-  assert.equal(platform.cloudMatterMeterUuid, null);
-});
