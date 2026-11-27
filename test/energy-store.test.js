@@ -131,6 +131,39 @@ test('marks removed devices inactive without deleting their historical totals', 
   });
 });
 
+
+test('falls back to refreshed daily values when the current monthly snapshot is stale', () => {
+  withStore(store => {
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-11-25', value: 1200 },
+      { date: '2026-11-26', value: 2300 }
+    ], { latestDate: '2026-11-26' });
+    store.recordMonthlyEnergy('cloud-p110m', [
+      { month: '2026-11', value: 5000 }
+    ]);
+    assert.equal(store.getSummary().totals.monthly['2026-11'], 5000);
+
+    // The next daily poll succeeds but the monthly endpoint is unavailable.
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-11-25', value: 1200 },
+      { date: '2026-11-26', value: 2600 }
+    ], { latestDate: '2026-11-26' });
+
+    let summary = store.getSummary();
+    assert.equal(summary.totals.monthly['2026-11'], 3800);
+    assert.equal(summary.totals.yearly['2026'], 3800);
+    assert.equal(summary.devices['cloud-p110m'].energyWh, 3800);
+
+    // A later successful monthly poll restores the authoritative full-month value.
+    store.recordMonthlyEnergy('cloud-p110m', [
+      { month: '2026-11', value: 5400 }
+    ]);
+    summary = store.getSummary();
+    assert.equal(summary.totals.monthly['2026-11'], 5400);
+    assert.equal(summary.totals.yearly['2026'], 5400);
+  });
+});
+
 test('keeps cumulative cloud energy across a calendar-year rollover without double counting', () => {
   withStore(store => {
     store.recordDailyEnergy('cloud-p110m', [
