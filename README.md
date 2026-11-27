@@ -2,6 +2,14 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
+## Beta 0.2.0-beta.25
+
+- Corrected Matter periodic imported energy: it now publishes the verified authoritative current-month total from Tapo Cloud, rather than a delta between successive cloud polls.
+- The current-month period starts at local midnight on the first day of the month in the device timezone.
+- If any active cloud device has no verified current-month bucket, periodic energy is reported as unavailable instead of publishing a fabricated zero.
+- Kept cumulative imported energy unchanged and added regression coverage for UTC and Europe/Moscow month-boundary handling.
+- Extended the real Homebridge Matter runtime CI test to verify both cumulative and periodic energy readback.
+
 ## Beta 0.2.0-beta.24
 
 - Hardened cloud Matter meter registration across Homebridge restarts: the endpoint is registered before any state update, transient registration failures are retried, and the previous simulation meter is removed only after cloud registration succeeds.
