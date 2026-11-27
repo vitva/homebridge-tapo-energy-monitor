@@ -34,7 +34,7 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Python остаётся контрольным вариантом; Node.js — дополнительный экспериментальный транспорт.</p>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Подключение выполняется штатным Node.js-клиентом внутри Homebridge; отдельный Python не требуется.</p>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
