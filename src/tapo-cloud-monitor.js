@@ -5,7 +5,9 @@ const { TapoThingApi, validateThingHost } = require('./tapo-thing-api');
 const {
   buildDailyUsageRange,
   buildQuarterStartTimestamp,
-  normalizeDailyEnergyHistory
+  buildYearlyUsageRange,
+  normalizeDailyEnergyHistory,
+  normalizeMonthlyEnergyHistory
 } = require('./tapo-cloud-client');
 
 class TapoCloudEnergyMonitor {
@@ -106,19 +108,34 @@ class TapoCloudEnergyMonitor {
       const history = normalizeDailyEnergyHistory(usage, info.region);
       if (!history.ok) {
         this.log.warn('Tapo daily energy history format was not recognized for %s.', device.name);
-        continue;
+      } else if (history.meta.lastRecordMatchesLocalDate !== true) {
+        this.log.warn('Tapo history date alignment is not verified for %s; daily records were not imported.', device.name);
+      } else {
+        store.recordDailyEnergy(device.id, history.records, {
+          name: device.name,
+          model: device.model,
+          timeZone: info.region,
+          latestDate: history.meta.lastDate
+        });
+        importedDevices += 1;
       }
-      if (history.meta.lastRecordMatchesLocalDate !== true) {
-        this.log.warn('Tapo history date alignment is not verified for %s; this response was not imported.', device.name);
-        continue;
+
+      try {
+        const monthlyRange = buildYearlyUsageRange(info.region);
+        const monthlyUsage = await this.api.getUsage(device.id, info.host, monthlyRange);
+        const monthlyHistory = normalizeMonthlyEnergyHistory(monthlyUsage, info.region);
+        if (monthlyHistory.ok) {
+          store.recordMonthlyEnergy(device.id, monthlyHistory.records, {
+            name: device.name,
+            model: device.model,
+            timeZone: info.region
+          });
+        } else {
+          this.log.warn('Tapo monthly energy history format was not recognized for %s.', device.name);
+        }
+      } catch (error) {
+        this.log.warn('Could not read Tapo monthly energy history for %s: %s', device.name, error.message);
       }
-      store.recordDailyEnergy(device.id, history.records, {
-        name: device.name,
-        model: device.model,
-        timeZone: info.region,
-        latestDate: history.meta.lastDate
-      });
-      importedDevices += 1;
     }
     return { deviceCount: this.devices.length, importedDevices };
   }
