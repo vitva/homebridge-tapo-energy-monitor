@@ -50,6 +50,11 @@ class EnergyStore {
     for (const [deviceId, device] of Object.entries(this.state.devices)) {
       device.active = activeIds.has(deviceId);
     }
+    // Cloud combined totals must stop counting devices that disappeared from
+    // the live account, while their per-device history remains available.
+    if (Object.values(this.state.devices).some(device => device?.source === 'tapo_cloud')) {
+      this.rebuildCloudTotals();
+    }
     this.save();
   }
 
@@ -156,7 +161,6 @@ class EnergyStore {
         daily.daily[date] = value;
         const monthKey = year + '-' + month;
         dailyMonthly[monthKey] = (dailyMonthly[monthKey] || 0) + value;
-        totals.daily[date] = (totals.daily[date] || 0) + value;
       }
       const monthly = { ...dailyMonthly, ...(device.energyByMonth || {}) };
       const yearly = {};
@@ -164,11 +168,18 @@ class EnergyStore {
         if (!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(monthKey) || !Number.isFinite(value) || value < 0) continue;
         const year = monthKey.slice(0, 4);
         yearly[year] = (yearly[year] || 0) + value;
-        totals.monthly[monthKey] = (totals.monthly[monthKey] || 0) + value;
+        if (device.active !== false) totals.monthly[monthKey] = (totals.monthly[monthKey] || 0) + value;
       }
-      for (const [year, value] of Object.entries(yearly)) {
-        totals.yearly[year] = (totals.yearly[year] || 0) + value;
+      for (const [date, value] of Object.entries(daily.daily)) {
+        if (device.active !== false) totals.daily[date] = (totals.daily[date] || 0) + value;
       }
+      if (device.active !== false) {
+        for (const [year, value] of Object.entries(yearly)) {
+          totals.yearly[year] = (totals.yearly[year] || 0) + value;
+        }
+      }
+      // Preserve archived device totals for inspection, but exclude them from
+      // the combined account totals above.
       device.totals = { daily: daily.daily, monthly, yearly };
       device.energyWh = Object.values(monthly).reduce((sum, value) => sum + value, 0);
     }

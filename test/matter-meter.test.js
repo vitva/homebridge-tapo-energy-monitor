@@ -66,8 +66,9 @@ test('creates a distinct cloud Matter meter with no fabricated live power', () =
   assert.equal(accessory.deviceType, 'ElectricalMeterType');
   assert.equal(accessory.context.measurementSource, 'tapo_cloud');
   assert.equal(accessory.context.testBuild, true);
-  assert.equal(accessory.clusters.electricalPowerMeasurement.activePower, null);
+  assert.equal('electricalPowerMeasurement' in accessory.clusters, false);
   assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported, { energy: 0 });
+  assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, { energy: 0 });
 });
 
 test('publishes only real cloud imported Wh as Matter mWh and excludes estimates', async () => {
@@ -79,12 +80,59 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
       simulated: { source: 'simulation', energyWh: 99999 },
       malformed: { source: 'tapo_cloud', energyWh: NaN }
     }
-  });
+  }, null, 2_000_000);
 
-  assert.deepEqual(result, { cumulativeEnergyWh: 730 });
+  assert.deepEqual(result, {
+    cumulativeEnergyWh: 730,
+    periodicEnergyWh: 0,
+    timestamp: 2000
+  });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
-      cumulativeEnergyImported: { energy: 730000 }
+      cumulativeEnergyImported: { energy: 730000 },
+      periodicEnergyImported: {
+        energy: 0,
+        startTimestamp: 1999,
+        endTimestamp: 2000
+      }
     }]
   ]);
+});
+
+
+test('publishes the change since the previous cloud poll as periodic imported energy', async () => {
+  const { api, updates } = mockApi();
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: {
+      cloudA: { source: 'tapo_cloud', energyWh: 735.25 }
+    }
+  }, { cumulativeEnergyWh: 730, timestamp: 2000 }, 2_900_000);
+
+  assert.deepEqual(result, {
+    cumulativeEnergyWh: 735.25,
+    periodicEnergyWh: 5.25,
+    timestamp: 2900
+  });
+  assert.deepEqual(updates[0], [
+    'cloud-meter-uuid',
+    'electricalEnergyMeasurement',
+    {
+      cumulativeEnergyImported: { energy: 735250 },
+      periodicEnergyImported: {
+        energy: 5250,
+        startTimestamp: 2000,
+        endTimestamp: 2900
+      }
+    }
+  ]);
+});
+
+test('does not publish a negative periodic delta when cloud totals are corrected down', async () => {
+  const { api, updates } = mockApi();
+  const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
+    devices: { cloudA: { source: 'tapo_cloud', energyWh: 700 } }
+  }, { cumulativeEnergyWh: 730, timestamp: 2000 }, 2_900_000);
+
+  assert.equal(result.periodicEnergyWh, 0);
+  assert.equal(updates[0][2].periodicEnergyImported.energy, 0);
 });

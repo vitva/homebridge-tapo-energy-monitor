@@ -191,3 +191,32 @@ test('keeps cumulative cloud energy across a calendar-year rollover without doub
     assert.equal(summary.totals.daily['2027-01-01'], 700);
   });
 });
+
+test('excludes archived cloud devices from combined totals but retains their per-device history', () => {
+  withStore(store => {
+    store.recordDailyEnergy('active-p110m', [
+      { date: '2026-11-26', value: 1000 }
+    ], { name: 'Active plug', latestDate: '2026-11-26' });
+    store.recordMonthlyEnergy('active-p110m', [
+      { month: '2026-11', value: 5000 }
+    ]);
+    store.recordDailyEnergy('archived-p110m', [
+      { date: '2026-11-26', value: 636 }
+    ], { name: 'Archived plug', latestDate: '2026-11-26' });
+    store.recordMonthlyEnergy('archived-p110m', [
+      { month: '2026-11', value: 636 }
+    ]);
+
+    // The device is removed from the current cloud account; totals must update
+    // immediately without deleting its stored history.
+    store.setActiveDevices(['active-p110m']);
+    const summary = store.getSummary();
+
+    assert.equal(summary.devices['archived-p110m'].active, false);
+    assert.equal(summary.devices['archived-p110m'].totals.monthly['2026-11'], 636);
+    assert.equal(summary.devices['archived-p110m'].totals.daily['2026-11-26'], 636);
+    assert.equal(summary.totals.daily['2026-11-26'], 1000);
+    assert.equal(summary.totals.monthly['2026-11'], 5000);
+    assert.equal(summary.totals.yearly['2026'], 5000);
+  });
+});

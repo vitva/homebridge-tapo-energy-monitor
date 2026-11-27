@@ -70,16 +70,20 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     model: 'P110M cloud energy history (test)',
     serialNumber: 'TAPO-ENERGY-CLOUD-TEST',
     context: { meterId: CLOUD_METER_ID, measurementSource: 'tapo_cloud', testBuild: true },
-    // This test accessory publishes only verified imported energy. Current W is
-    // deliberately omitted because the cloud power-history endpoints returned no samples.
+    // Cloud history has no trustworthy live-power sample. Do not declare a
+    // power-measurement cluster with a permanent null value: expose energy only.
+    // Declaring both imported-energy attributes enables both Matter features at
+    // registration time; features cannot be added by a later state update.
     clusters: {
-      electricalPowerMeasurement: { activePower: null },
-      electricalEnergyMeasurement: { cumulativeEnergyImported: { energy: 0 } }
+      electricalEnergyMeasurement: {
+        cumulativeEnergyImported: { energy: 0 },
+        periodicEnergyImported: { energy: 0 }
+      }
     }
   };
 }
 
-async function updateCloudEnergyMeter(api, uuid, summary) {
+async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null, nowMs = Date.now()) {
   const matter = api && api.matter;
   if (!matter || !uuid || typeof matter.updateAccessoryState !== 'function') return null;
 
@@ -89,12 +93,28 @@ async function updateCloudEnergyMeter(api, uuid, summary) {
       Number.isFinite(device.energyWh) && device.energyWh >= 0)
     .reduce((total, device) => total + device.energyWh, 0);
 
+  const timestamp = Math.floor(nowMs / 1000);
+  const hasPrevious = previousReading &&
+    Number.isFinite(previousReading.cumulativeEnergyWh) &&
+    Number.isFinite(previousReading.timestamp);
+  const periodicEnergyWh = hasPrevious
+    ? Math.max(0, cumulativeEnergyWh - previousReading.cumulativeEnergyWh)
+    : 0;
+  const startTimestamp = hasPrevious && previousReading.timestamp < timestamp
+    ? previousReading.timestamp
+    : Math.max(0, timestamp - 1);
+
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
-    cumulativeEnergyImported: { energy: Math.round(cumulativeEnergyWh * 1000) }
+    cumulativeEnergyImported: { energy: Math.round(cumulativeEnergyWh * 1000) },
+    periodicEnergyImported: {
+      energy: Math.round(periodicEnergyWh * 1000),
+      startTimestamp,
+      endTimestamp: timestamp
+    }
   });
 
-  return { cumulativeEnergyWh };
+  return { cumulativeEnergyWh, periodicEnergyWh, timestamp };
 }
 
 module.exports = {

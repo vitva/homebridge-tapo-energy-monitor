@@ -21,6 +21,7 @@ class TapoEnergyMonitorPlatform {
     this.store = null;
     this.matterMeterUuid = null;
     this.cloudMatterMeterUuid = null;
+    this.cloudMatterLastReading = null;
 
     api.on('didFinishLaunching', () => {
       this.start().catch(error => this.log.error('Could not start Tapo Energy Monitor: %s', error.message));
@@ -124,10 +125,19 @@ class TapoEnergyMonitorPlatform {
         const result = await this.cloudMonitor.poll(this.store);
         if (this.cloudMatterMeterUuid) {
           try {
-            const meter = await updateCloudEnergyMeter(this.api, this.cloudMatterMeterUuid, this.store.getSummary());
+            const meter = await updateCloudEnergyMeter(
+              this.api,
+              this.cloudMatterMeterUuid,
+              this.store.getSummary(),
+              this.cloudMatterLastReading
+            );
             if (meter) {
-              this.log.info('[MATTER CLOUD TEST] cumulative imported cloud energy: %s Wh',
-                meter.cumulativeEnergyWh.toFixed(2));
+              this.cloudMatterLastReading = {
+                cumulativeEnergyWh: meter.cumulativeEnergyWh,
+                timestamp: meter.timestamp
+              };
+              this.log.info('[MATTER CLOUD TEST] cumulative imported: %s Wh | periodic: %s Wh',
+                meter.cumulativeEnergyWh.toFixed(2), meter.periodicEnergyWh.toFixed(2));
             }
           } catch (error) {
             this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);
