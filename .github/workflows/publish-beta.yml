@@ -37,6 +37,25 @@ jobs:
         run: npm pack --dry-run
       - name: Install npm CLI with staged publishing support
         run: npm install --global npm@11.21.3
+      - name: Preflight npm version and staged candidates
+        env:
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+          PACKAGE_VERSION: ${{ fromJSON('{"version":"0.2.0-beta.15"}').version }}
+        run: |
+          set -euo pipefail
+          echo "Checking published version..."
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "Version $PACKAGE_NAME@$PACKAGE_VERSION already exists in the public registry; refusing to stage." >&2
+            exit 1
+          fi
+          echo "Checking existing staged versions..."
+          STAGED="$(npm stage list "$PACKAGE_NAME" --json)"
+          printf '%s\\n' "$STAGED"
+          if printf '%s' "$STAGED" | grep -Fq "$PACKAGE_VERSION"; then
+            echo "Version $PACKAGE_VERSION already has a staged candidate; refusing to stage again." >&2
+            exit 1
+          fi
+          echo "Preflight passed: no published or currently staged candidate for $PACKAGE_VERSION."
       - name: Stage beta for approval
         run: npm stage publish --access public --tag beta
         env:
