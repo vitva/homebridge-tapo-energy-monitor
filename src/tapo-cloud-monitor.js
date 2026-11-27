@@ -29,22 +29,36 @@ class TapoCloudEnergyMonitor {
     });
     if (!login.ok) throw new Error(login.message || 'Tapo cloud authentication failed.');
     this.session = login;
+    this.lastRefreshAt = Date.now();
     const host = await this.auth.discoverThingService(this.username, login.token);
     this.api = this.apiFactory({ host, token: login.token, termId: login.termId });
     await this.refreshDevices();
   }
 
   async refreshSession() {
-    if (!this.session || !this.session.refreshToken ||
-        Date.now() - this.lastRefreshAt < 30 * 60 * 1000) return;
-    const refreshed = await this.auth.refresh(this.session.refreshToken);
-    if (!refreshed.ok) throw new Error('Tapo cloud session refresh failed.');
-    this.session = refreshed;
-    this.api = this.apiFactory({
-      host: this.api.host,
-      token: refreshed.token,
-      termId: refreshed.termId
-    });
+    if (!this.session || Date.now() - this.lastRefreshAt < 30 * 60 * 1000) return;
+    let refreshed = null;
+    if (this.session.refreshToken) {
+      try {
+        refreshed = await this.auth.refresh(this.session.refreshToken);
+      } catch {
+        refreshed = null;
+      }
+    }
+    if (!refreshed || !refreshed.ok) {
+      const login = await this.auth.login({ username: this.username, password: this.password });
+      if (!login.ok) throw new Error(login.message || 'Tapo cloud re-authentication failed.');
+      this.session = login;
+      const host = await this.auth.discoverThingService(this.username, login.token);
+      this.api = this.apiFactory({ host, token: login.token, termId: login.termId });
+    } else {
+      this.session = refreshed;
+      this.api = this.apiFactory({
+        host: this.api.host,
+        token: refreshed.token,
+        termId: refreshed.termId
+      });
+    }
     this.lastRefreshAt = Date.now();
   }
 
