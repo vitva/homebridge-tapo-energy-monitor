@@ -82,7 +82,7 @@ test('imports verified P110M daily cloud Wh into the persistent energy store', a
     assert.equal(summary.totals.monthly['2026-11'], 5000);
     assert.equal(summary.totals.yearly['2026'], 6000);
     assert.equal(infoMessages.some(message => message.includes('[TAPO CLOUD STORED]') &&
-      message.includes('energyWh=6000.00') && message.includes('monthlyBuckets=2') &&
+      message.includes('energyWh=6000.00') && message.includes('monthlyBuckets=12') &&
       message.includes('month[2026-11]=5000.00 Wh')), true,
     'cloud poll must log the values actually persisted for each device');
   } finally {
