@@ -145,19 +145,8 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       .map(part => [part.type, Number(part.value)])
   );
   const endBoundary = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
-  const localTime = typeof energyData.local_time === 'string' &&
-    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/.test(energyData.local_time)
-    ? energyData.local_time
-    : null;
-  const localDate = localTime ? localTime.slice(0, 10) : null;
-  // Tapo's daily series includes the current local calendar day. Anchor the
-  // final bucket to local_time when available; end_timestamp is an exclusive
-  // request boundary and may not describe the returned array's actual length.
-  const lastRecordDay = localDate
-    ? Date.parse(localDate + 'T00:00:00Z')
-    : endBoundary - 86400000;
   const records = energyData.data.map((value, index) => {
-    const day = new Date(lastRecordDay - (energyData.data.length - 1 - index) * 86400000);
+    const day = new Date(endBoundary - (energyData.data.length - index) * 86400000);
     return { date: day.toISOString().slice(0, 10), value };
   });
   const requestedDays = Number.isInteger(energyData.start_timestamp)
@@ -178,7 +167,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
-      valueUnit: 'Wh',
+      valueUnit: 'unconfirmed',
       timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
       localTime,
       localDate,
@@ -187,7 +176,7 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       startTimestamp: energyData.start_timestamp ?? null,
       endTimestamp: energyData.end_timestamp,
       interval: energyData.interval,
-      alignmentVerified: Boolean(localDate && lastRecordDate === localDate)
+      alignmentVerified: false
     }
   };
 }
