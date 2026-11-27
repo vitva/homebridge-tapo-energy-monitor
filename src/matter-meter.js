@@ -64,6 +64,8 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     return null;
   }
 
+  const timestamp = Math.max(0, Math.floor(Date.now() / 1000) - MATTER_EPOCH_UNIX_OFFSET_SECONDS);
+
   return {
     UUID: matter.uuid.generate(CLOUD_METER_ID),
     displayName,
@@ -79,8 +81,8 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     clusters: {
       electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: {
-        cumulativeEnergyImported: { energy: 0 },
-        periodicEnergyImported: { energy: 0 }
+        cumulativeEnergyImported: { energy: 0, endTimestamp: timestamp },
+        periodicEnergyImported: { energy: 0, startTimestamp: Math.max(0, timestamp - 1), endTimestamp: timestamp }
       }
     }
   };
@@ -112,7 +114,10 @@ async function updateCloudEnergyMeter(api, uuid, summary, previousReading = null
 
   const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
   await matter.updateAccessoryState(uuid, energyCluster, {
-    cumulativeEnergyImported: { energy: Math.round(cumulativeEnergyWh * 1000) },
+    cumulativeEnergyImported: {
+      energy: Math.round(cumulativeEnergyWh * 1000),
+      endTimestamp: timestamp
+    },
     periodicEnergyImported: {
       energy: Math.round(periodicEnergyWh * 1000),
       startTimestamp,

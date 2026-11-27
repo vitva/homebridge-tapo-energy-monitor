@@ -138,6 +138,12 @@ class TapoEnergyMonitorPlatform {
               };
               this.log.info('[MATTER CLOUD TEST] cumulative imported: %s Wh | periodic: %s Wh',
                 meter.cumulativeEnergyWh.toFixed(2), meter.periodicEnergyWh.toFixed(2));
+              if (typeof this.api.matter.getAccessoryState === 'function') {
+                const energyCluster = this.api.matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
+                const state = await this.api.matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
+                this.log.info('[MATTER CLOUD READBACK] %s | %s',
+                  this.cloudMatterMeterUuid, JSON.stringify(state ?? null));
+              }
             }
           } catch (error) {
             this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);

@@ -67,8 +67,11 @@ test('creates a distinct cloud Electrical Meter with required power cluster and 
   assert.equal(accessory.context.measurementSource, 'tapo_cloud');
   assert.equal(accessory.context.testBuild, true);
   assert.deepEqual(accessory.clusters.electricalPowerMeasurement, { activePower: null });
-  assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported, { energy: 0 });
-  assert.deepEqual(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported, { energy: 0 });
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.energy, 0);
+  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.endTimestamp));
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.energy, 0);
+  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.startTimestamp));
+  assert.ok(Number.isInteger(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.endTimestamp));
 });
 
 test('publishes only real cloud imported Wh as Matter mWh and excludes estimates', async () => {
@@ -89,7 +92,7 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
   });
   assert.deepEqual(updates, [
     ['cloud-meter-uuid', 'electricalEnergyMeasurement', {
-      cumulativeEnergyImported: { energy: 730000 },
+      cumulativeEnergyImported: { energy: 730000, endTimestamp: 853315200 },
       periodicEnergyImported: {
         energy: 0,
         startTimestamp: 853315199,
@@ -117,7 +120,7 @@ test('publishes the change since the previous cloud poll as periodic imported en
     'cloud-meter-uuid',
     'electricalEnergyMeasurement',
     {
-      cumulativeEnergyImported: { energy: 735250 },
+      cumulativeEnergyImported: { energy: 735250, endTimestamp: 853316100 },
       periodicEnergyImported: {
         energy: 5250,
         startTimestamp: 853315200,
