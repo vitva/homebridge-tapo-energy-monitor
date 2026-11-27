@@ -59,6 +59,24 @@ test('imports cloud daily Wh idempotently and rebuilds day, month and year total
   });
 });
 
+test('prefers cloud monthly totals over partial daily sums for monthly and yearly reports', () => {
+  withStore(store => {
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-11-25', value: 1200 },
+      { date: '2026-11-26', value: 2300 }
+    ]);
+    store.recordMonthlyEnergy('cloud-p110m', [
+      { month: '2026-01', value: 8000 },
+      { month: '2026-11', value: 5000 }
+    ]);
+    const summary = store.getSummary();
+    assert.equal(summary.totals.daily['2026-11-25'], 1200);
+    assert.equal(summary.totals.monthly['2026-11'], 5000);
+    assert.equal(summary.totals.yearly['2026'], 13000);
+    assert.equal(summary.devices['cloud-p110m'].energyWh, 13000);
+  });
+});
+
 test('ignores invalid IDs and negative/non-finite power readings', () => {
   withStore((store) => {
     const now = Date.now();
