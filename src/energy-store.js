@@ -120,8 +120,10 @@ class EnergyStore {
   rebuildCloudTotals() {
     const totals = emptyTotals();
     for (const device of Object.values(this.state.devices)) {
-      if (!device || !device.energyByDay) continue;
-      for (const [date, value] of Object.entries(device.energyByDay)) {
+      if (!device) continue;
+      const daily = device.energyByDay && Object.keys(device.energyByDay).length
+        ? device.energyByDay : (device.totals && device.totals.daily) || {};
+      for (const [date, value] of Object.entries(daily)) {
         if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
         const [year, month] = date.split('-');
         totals.daily[date] = (totals.daily[date] || 0) + value;
