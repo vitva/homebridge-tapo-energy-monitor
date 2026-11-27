@@ -22,7 +22,7 @@
         "title": "Publish Matter Electrical Meter",
         "type": "boolean",
         "default": true,
-        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. Publishes the estimated Matter meter in simulation mode only. Live cloud history is stored in the dashboard and is not exported as a Matter meter yet."
+        "description": "Requires Matter enabled on this Homebridge bridge and Homebridge 2.5.0 or later. In cloud mode publishes a separate test Electrical Meter with real imported P110M energy (Wh converted to mWh). Current power is omitted because verified live W samples are not yet available. In simulation mode publishes the separate estimated meter."
       },
       "matterMeterName": {
         "title": "Matter meter name",
