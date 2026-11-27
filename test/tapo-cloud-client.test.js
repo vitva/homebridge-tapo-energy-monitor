@@ -406,7 +406,7 @@ test('maps daily energy values backward from the exclusive end date', () => {
   assert.equal(parsed.meta.requestedDays, 61);
   assert.equal(parsed.meta.returnedDays, 91);
   assert.equal(parsed.meta.rangeMismatch, true);
-  assert.equal(parsed.meta.valueUnit, 'unconfirmed');
+  assert.equal(parsed.meta.valueUnit, 'Wh');
   assert.equal(parsed.meta.timeZone, 'Europe/Moscow');
   assert.equal(parsed.meta.startTimestamp, 1790456400);
   assert.equal(parsed.meta.endTimestamp, 1795726800);
