@@ -633,7 +633,7 @@ test('uses quarter-aligned daily history as primary and compares a rolling 60-da
   assert.equal(result.ok, true);
   assert.equal(ranges.length, 2);
   assert.equal(ranges[0].start_timestamp, buildQuarterStartTimestamp('Europe/Moscow', ranges[0].end_timestamp - 1));
-  assert.equal(ranges[1].start_timestamp, buildDailyUsageRange('Europe/Moscow').start_timestamp);
+  assert.equal(ranges[1].start_timestamp, buildDailyUsageRange('Europe/Moscow', ranges[0].end_timestamp * 1000 - 1).start_timestamp);
   assert.equal(ranges[1].end_timestamp, ranges[0].end_timestamp);
   const comparison = result.diagnostics.find(item => item.stage === 'usage_range_compare');
   assert.equal(comparison.status, 'success');
@@ -643,7 +643,7 @@ test('uses quarter-aligned daily history as primary and compares a rolling 60-da
   assert.match(comparison.reason, /samples=/);
   assert.match(comparison.reason, /суммы полных ответов=60\/160 Wh/);
   assert.match(comparison.reason, /пересечение дат=.* \(5\)/);
-  assert.match(comparison.reason, /суммы пересечения=60\/60 Wh/);
+  assert.match(comparison.reason, /суммы пересечения \(квартал\/контроль\)=60\/60 Wh/);
   assert.match(comparison.reason, /разница пересечения=0 Wh/);
   assert.match(comparison.reason, /различий по дням=0/);
   assert.equal(JSON.stringify(result).includes('session-secret'), false);
