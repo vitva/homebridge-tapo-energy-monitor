@@ -29,7 +29,7 @@ const { parseWattCsv } = require('../src/watt-csv');
         if (!data || !data.devices || !data.totals) throw new Error('Invalid energy history format.');
         return { available: true, updatedAt: fs.statSync(filePath).mtimeMs, data };
       } catch (error) {
-        if (error.code === 'ENOENT') return { available: false, message: 'No history file yet. Start the platform in simulation mode and wait for its first sample.' };
+        if (error.code === 'ENOENT') return { available: false, message: 'Истории пока нет. Укажите данные аккаунта Tapo или включите режим симуляции.' };
         throw error;
       }
     }
