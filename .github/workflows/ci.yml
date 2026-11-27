@@ -111,13 +111,13 @@ jobs:
           }
           JSON
           set +e
-          timeout 25s ./node_modules/.bin/homebridge \
+          timeout --kill-after=5s 25s ./node_modules/.bin/homebridge \
             -U "$RUNNER_TEMP/homebridge-matter-data" \
             > "$RUNNER_TEMP/homebridge-matter-runtime.log" 2>&1
           MATTER_EXIT_CODE=$?
           set -e
           cat "$RUNNER_TEMP/homebridge-matter-runtime.log"
-          if [ "$MATTER_EXIT_CODE" -ne 124 ]; then
+          if [ "$MATTER_EXIT_CODE" -ne 124 ] && [ "$MATTER_EXIT_CODE" -ne 137 ]; then
             echo "Matter-enabled Homebridge exited unexpectedly (code $MATTER_EXIT_CODE)." >&2
             exit 1
           fi
