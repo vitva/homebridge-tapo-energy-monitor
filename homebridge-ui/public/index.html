@@ -20,7 +20,7 @@
     <h5 class="mt-4">Devices</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
-        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">Today</th></tr></thead>
+        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">Latest verified day</th></tr></thead>
         <tbody id="devices"></tbody>
       </table>
     </div>
@@ -131,6 +131,8 @@
       const archivedTodayWh = archivedTodayDevices.reduce((sum, device) =>
         sum + Number(device.totals.daily[displayedDayKey]), 0);
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
+      const monthKey = todayKey.slice(0, 7);
+      const yearKey = todayKey.slice(0, 4);
       byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
       byId('today-label').textContent = displayedDayKey && displayedDayKey !== todayKey
         ? 'Latest verified day · combined (' + displayedDayKey + ')'
@@ -160,8 +162,6 @@
       const periods = byId('periods');
       periods.replaceChildren();
       const date = new Date();
-      const monthKey = todayKey.slice(0, 7);
-      const yearKey = todayKey.slice(0, 4);
       const archivedMonthWh = archivedDevices.reduce((sum, device) =>
         sum + Number(device.totals?.monthly?.[monthKey] || 0), 0);
       const archivedYearWh = archivedDevices.reduce((sum, device) =>
