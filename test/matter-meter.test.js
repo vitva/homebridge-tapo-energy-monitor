@@ -88,6 +88,7 @@ test('publishes only real cloud imported Wh as Matter mWh and excludes estimates
     periodicEnergyWh: null,
     timestamp: 1800000000,
     dateKey: '2027-01-15',
+    periodKey: '2027-01',
     timeZone: 'UTC'
   });
   assert.deepEqual(updates, [
@@ -192,7 +193,7 @@ test('uses the device timezone when calculating the current-month period start',
   assert.equal(result.periodicEnergyWh, 10);
   assert.equal(updates[0][2].periodicEnergyImported.startTimestamp, Date.UTC(2026, 11, 31, 21, 0, 0) / 1000);
 });
-test('does not derive periodic usage from cumulative corrections when daily history is unavailable', async () => {
+test('does not derive periodic usage from cumulative corrections when monthly history is unavailable', async () => {
   const { api, updates } = mockApi();
   const result = await updateCloudEnergyMeter(api, 'cloud-meter-uuid', {
     devices: { cloudA: { source: 'tapo_cloud', active: true, energyWh: 700, timeZone: 'UTC' } }
