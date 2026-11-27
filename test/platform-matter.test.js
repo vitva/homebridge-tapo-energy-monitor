@@ -216,6 +216,31 @@ test('keeps a successful Matter update successful when readback independently fa
 });
 
 
+test('waits for the asynchronous Homebridge Matter state update before verifying cloud energy readback', async () => {
+  const logs = [];
+  let state;
+  const matter = {
+    clusterNames: { ElectricalEnergyMeasurement: 'electricalEnergyMeasurement' },
+    updateAccessoryState: async (_uuid, _cluster, attributes) => {
+      // Mirrors Homebridge 2.5.0: the public API dispatches the event and the
+      // Matter server applies the endpoint transaction on a later turn.
+      setTimeout(() => { state = structuredClone(attributes); }, 25);
+    },
+    getAccessoryState: async () => state
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.log.info = message => logs.push(message);
+  platform.cloudMatterMeterUuid = 'cloud-meter-uuid';
+
+  const result = await platform.publishCloudMatterReading({
+    devices: { cloudA: { source: 'tapo_cloud', energyWh: 123.456 } }
+  });
+
+  assert.equal(result.cumulativeEnergyWh, 123.456);
+  assert.ok(logs.some(message => /MATTER CLOUD READBACK.*cumulativeEnergyImported/.test(message)));
+  assert.equal(logs.some(message => /state unavailable|did not converge/.test(message)), false);
+});
+
 test('retries cloud Matter registration only when enabled and retry time has elapsed', async () => {
   const matter = {};
   const { platform } = makePlatform({ enableMatterMeter: false }, matter);
