@@ -34,6 +34,31 @@ test('integrates samples and stores per-device plus combined period totals', () 
   });
 });
 
+test('imports cloud daily Wh idempotently and rebuilds day, month and year totals', () => {
+  withStore(store => {
+    const records = [
+      { date: '2026-11-25', value: 1200 },
+      { date: '2026-11-26', value: 2300 }
+    ];
+    store.recordDailyEnergy('cloud-p110m', records, { name: 'P110M', model: 'P110M' });
+    store.recordDailyEnergy('cloud-p110m', records, { name: 'P110M', model: 'P110M' });
+    let summary = store.getSummary();
+    assert.equal(summary.devices['cloud-p110m'].energyWh, 3500);
+    assert.equal(summary.devices['cloud-p110m'].totals.daily['2026-11-25'], 1200);
+    assert.equal(summary.totals.daily['2026-11-26'], 2300);
+    assert.equal(summary.totals.monthly['2026-11'], 3500);
+    assert.equal(summary.totals.yearly['2026'], 3500);
+
+    store.recordDailyEnergy('cloud-p110m', [
+      { date: '2026-11-26', value: 2500 }
+    ]);
+    summary = store.getSummary();
+    assert.equal(summary.devices['cloud-p110m'].energyWh, 3700);
+    assert.equal(summary.totals.daily['2026-11-26'], 2500);
+    assert.equal(summary.totals.monthly['2026-11'], 3700);
+  });
+});
+
 test('ignores invalid IDs and negative/non-finite power readings', () => {
   withStore((store) => {
     const now = Date.now();
