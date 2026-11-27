@@ -51,7 +51,7 @@ jobs:
           fi
           echo "Checking existing staged versions..."
           STAGED="$(npm stage list "$PACKAGE_NAME" --json)"
-          printf '%s\\n' "$STAGED"
+          echo "$STAGED"
           if printf '%s' "$STAGED" | grep -Fq "$PACKAGE_VERSION"; then
             echo "Version $PACKAGE_VERSION already has a staged candidate; refusing to stage again." >&2
             exit 1
