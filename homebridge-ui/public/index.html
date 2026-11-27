@@ -2,7 +2,7 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
       <h3 class="mb-1">Tapo Energy Monitor</h3>
-      <div class="text-muted small">Local energy history · prototype / simulated readings</div>
+      <div class="text-muted small">Tapo Cloud energy history · daily Wh readings</div>
     </div>
     <button id="refresh" class="btn btn-primary">Refresh</button>
   </div>
@@ -18,7 +18,7 @@
     <h5 class="mt-4">Devices</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
-        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">Estimated total</th><th class="text-end">Today</th></tr></thead>
+        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">Today</th></tr></thead>
         <tbody id="devices"></tbody>
       </table>
     </div>
@@ -34,8 +34,7 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Пароль и MFA-код используются только для этой проверки и не сохраняются в настройках плагина. Python остаётся контрольным вариантом; Node.js — дополнительный экспериментальный транспорт.</p>
-  <div class="mb-2"><label class="form-label" for="tapo-transport">Способ подключения</label><select id="tapo-transport" class="form-select"><option value="python">Python · контрольный вариант</option><option value="node">Node.js · экспериментальный вариант</option></select></div>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Подключение выполняется штатным Node.js-клиентом внутри Homebridge.</p>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
@@ -59,7 +58,7 @@
   <div id="watt-status" class="small mt-2" role="status"></div>
   <div id="watt-results" class="mt-3"></div>
   <h5>Platform settings</h5>
-  <p class="text-muted small">Configure simulation devices and polling below. Cloud diagnostics do not yet feed the energy-history totals.</p>
+  <p class="text-muted small">Configure simulation devices and polling below. Tapo Cloud daily history is imported automatically when account credentials are configured. Simulation is optional and separate.</p>
   <div id="settings-form"></div>
 </div>
 
@@ -71,7 +70,6 @@
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
     const status = byId('status');
@@ -103,11 +101,15 @@
 
       const data = result.data;
       const devices = Object.values(data.devices || {});
-      const todayKey = localDay();
-      const todayWh = data.totals?.daily?.[todayKey] || 0;
       const activeDevices = devices.filter(device => device.active !== false);
+      const cloudHistory = activeDevices.some(device => device.source === 'tapo_cloud');
+      const primaryCloudDevice = activeDevices.find(device => device.source === 'tapo_cloud' && device.latestDate);
+      const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
+      const todayWh = cloudHistory
+        ? activeDevices.reduce((sum, device) => sum + Number(device.totals?.daily?.[device.latestDate] || 0), 0)
+        : (data.totals?.daily?.[todayKey] || 0);
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
-      byId('power').textContent = number(currentPower, 1) + ' W';
+      byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
       byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
       byId('count').textContent = activeDevices.length + ' active';
 
@@ -119,9 +121,9 @@
         const name = document.createElement('td'); name.textContent = device.name || device.id;
         const model = document.createElement('td'); model.textContent = device.model || '—';
         const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived' : 'Active';
-        const power = document.createElement('td'); power.className = 'text-end'; power.textContent = number(device.powerW, 1) + ' W';
+        const power = document.createElement('td'); power.className = 'text-end'; power.textContent = Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
-        const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[todayKey] || 0) / 1000, 3) + ' kWh';
+        const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[device.latestDate || todayKey] || 0) / 1000, 3) + ' kWh';
         tr.append(name, model, status, power, total, daily); body.append(tr);
       }
 
@@ -137,7 +139,7 @@
       );
       byId('updated').textContent = 'History file updated: ' + new Date(result.updatedAt).toLocaleString();
       byId('dashboard').hidden = false;
-      showMessage('History loaded from the Homebridge host. Energy values are estimates from power samples.', 'success');
+      showMessage(cloudHistory ? 'История получена из Tapo Cloud. Суточные значения — Wh; текущая мощность показывается отдельно.' : 'История загружена. Расход в режиме симуляции рассчитывается по выборкам мощности.', 'success');
     } catch (error) {
       byId('dashboard').hidden = true;
       showMessage('Could not load history: ' + error.message, 'danger');
@@ -150,12 +152,16 @@
     try {
       const config = await homebridge.getPluginConfig();
       const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
-      tapoCloudPython = platform && typeof platform.tapoCloudPython === 'string' && platform.tapoCloudPython.trim() ? platform.tapoCloudPython.trim() : 'python3';
+      byId('tapo-email').value = platform && typeof platform.tapoCloudUsername === 'string' ? platform.tapoCloudUsername : '';
+      byId('tapo-password').value = platform && typeof platform.tapoCloudPassword === 'string' ? platform.tapoCloudPassword : '';
       homebridge.showSchemaForm();
       homebridge.addEventListener('configChanged', (event) => {
         const updated = event.data || [];
         const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
-        tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
+        if (current) {
+          byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
+          byId('tapo-password').value = typeof current.tapoCloudPassword === 'string' ? current.tapoCloudPassword : '';
+        }
       });
       await refresh();
       await refreshWattImports();
@@ -223,20 +229,38 @@
     }
   }
 
+  async function saveTapoCredentials() {
+    const username = byId('tapo-email').value.trim();
+    const password = byId('tapo-password').value;
+    if (!username || !password) throw new Error('Укажите email и пароль аккаунта Tapo.');
+
+    const config = await homebridge.getPluginConfig();
+    const index = (config || []).findIndex(item => item.platform === 'TapoEnergyMonitor');
+    if (index < 0) throw new Error('Не найдена конфигурация платформы Tapo Energy Monitor.');
+
+    const updated = config.map((item, itemIndex) => itemIndex === index
+      ? { ...item, tapoCloudUsername: username, tapoCloudPassword: password }
+      : item);
+    await homebridge.updatePluginConfig(updated);
+    return { username, password };
+  }
+
   async function testTapoCloud() {
     const button = byId('tapo-test');
     const status = byId('tapo-test-status');
     const resultBox = byId('tapo-test-result');
     button.disabled = true;
-    status.textContent = 'Подключаемся к облаку TP-Link…';
+    status.textContent = 'Сохраняю данные и подключаюсь к облаку TP-Link…';
     resultBox.replaceChildren();
+    let persistCredentials = false;
+    let retainCredentialsForMfa = false;
     try {
+      const credentials = await saveTapoCredentials();
+      persistCredentials = true;
       const result = await homebridge.request('/tapo-cloud-test', {
-        username: byId('tapo-email').value,
-        password: byId('tapo-password').value,
+        username: credentials.username,
+        password: credentials.password,
         mfaCode: byId('tapo-mfa').value,
-        pythonExecutable: tapoCloudPython,
-        transport: byId('tapo-transport').value
       });
       status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
       const alert = document.createElement('div');
@@ -351,6 +375,8 @@
         }
       }
       if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
+        persistCredentials = false;
+        retainCredentialsForMfa = true;
         byId('tapo-mfa-wrap').hidden = false;
         if (result.code === 'mfa_required') byId('tapo-mfa').focus();
       } else {
@@ -364,8 +390,18 @@
       alert.textContent = error.message;
       resultBox.append(alert);
     } finally {
-      // Do not leave account secrets or one-time codes in the UI after a check.
-      byId('tapo-password').value = '';
+      // Save only after the check has finished; a pending MFA challenge keeps the settings modal open.
+      if (persistCredentials) {
+        try {
+          await homebridge.savePluginConfig();
+          status.textContent += ' · данные аккаунта сохранены';
+        } catch (saveError) {
+          status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
+        }
+      }
+      if (!retainCredentialsForMfa) {
+        byId('tapo-password').value = '';
+      }
       byId('tapo-mfa').value = '';
       button.disabled = false;
     }

@@ -114,6 +114,83 @@ function buildQuarterStartTimestamp(region, endTimestamp) {
 }
 
 
+function buildYearlyUsageRange(region, now = Date.now()) {
+  let timeZone = typeof region === 'string' && region.trim() ? region.trim() : 'UTC';
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    });
+    formatter.format(new Date(now));
+  } catch {
+    timeZone = 'UTC';
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+    });
+  }
+  const partsOf = value => Object.fromEntries(formatter.formatToParts(value)
+    .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  const localNow = partsOf(new Date(now));
+  const toLocalMidnight = target => {
+    let guess = target;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const local = partsOf(new Date(guess));
+      const representedAsUtc = Date.UTC(local.year, local.month - 1, local.day,
+        local.hour, local.minute, local.second);
+      guess = target - (representedAsUtc - guess);
+    }
+    return Math.floor(guess / 1000);
+  };
+  return {
+    start_timestamp: toLocalMidnight(Date.UTC(localNow.year, 0, 1)),
+    end_timestamp: toLocalMidnight(Date.UTC(localNow.year + 1, 0, 1)),
+    interval: 43200
+  };
+}
+
+function normalizeMonthlyEnergyHistory(payload, timeZone = 'UTC') {
+  const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
+  if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
+      !Number.isInteger(energyData.start_timestamp) || energyData.interval !== 43200 ||
+      !energyData.data.every(value => Number.isFinite(value) && value >= 0)) {
+    return { ok: false, reason: 'Ответ не соответствует формату месячной истории energy_data.' };
+  }
+  let formatter;
+  try {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+  } catch {
+    formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+  }
+  const startParts = Object.fromEntries(formatter.formatToParts(new Date(energyData.start_timestamp * 1000))
+    .filter(part => part.type !== 'literal').map(part => [part.type, Number(part.value)]));
+  if (startParts.month !== 1 || startParts.day !== 1) {
+    return { ok: false, reason: 'Месячная история Tapo должна начинаться с 1 января.' };
+  }
+  const records = energyData.data.map((value, index) => ({
+    month: startParts.year + '-' + String(index + 1).padStart(2, '0'),
+    value
+  }));
+  return {
+    ok: true,
+    records,
+    meta: {
+      count: records.length,
+      year: startParts.year,
+      firstMonth: records[0]?.month || null,
+      lastMonth: records.at(-1)?.month || null,
+      valueUnit: 'Wh',
+      timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC'
+    }
+  };
+}
+
 function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
   const energyData = payload && typeof payload === 'object' ? payload.energy_data : null;
   if (!energyData || typeof energyData !== 'object' || !Array.isArray(energyData.data) ||
@@ -145,13 +222,29 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       .map(part => [part.type, Number(part.value)])
   );
   const endBoundary = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+  const localTime = typeof energyData.local_time === 'string' &&
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/.test(energyData.local_time)
+    ? energyData.local_time
+    : null;
+  const localDate = localTime ? localTime.slice(0, 10) : null;
+  const localDateEpoch = localDate ? Date.parse(localDate + 'T00:00:00Z') : null;
+  const localDateOffset = localDateEpoch === null ? null : localDateEpoch - endBoundary;
+  // Tapo may return the end boundary during the current local day, or at
+  // the next local midnight. In either case the last bucket is localDate.
+  // Older partial responses remain anchored to their returned end_timestamp.
+  const lastRecordDay = localDateOffset === 0 || localDateOffset === -86400000
+    ? localDateEpoch
+    : endBoundary - 86400000;
   const records = energyData.data.map((value, index) => {
-    const day = new Date(endBoundary - (energyData.data.length - index) * 86400000);
+    const day = new Date(lastRecordDay - (energyData.data.length - 1 - index) * 86400000);
     return { date: day.toISOString().slice(0, 10), value };
   });
   const requestedDays = Number.isInteger(energyData.start_timestamp)
     ? Math.round((energyData.end_timestamp - energyData.start_timestamp) / 86400)
     : null;
+  const endBoundaryDate = new Date(endBoundary).toISOString().slice(0, 10);
+  const lastRecordDate = records.at(-1)?.date || null;
+  const lastRecordMatchesLocalDate = localDate ? localDate === lastRecordDate : null;
 
   return {
     ok: true,
@@ -159,17 +252,21 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
     meta: {
       count: records.length,
       firstDate: records[0]?.date || null,
-      lastDate: records.at(-1)?.date || null,
+      lastDate: lastRecordDate,
       requestedDays,
       returnedDays: records.length,
       rangeMismatch: requestedDays !== null && requestedDays !== records.length,
       dateBasis: 'end_timestamp',
-      valueUnit: 'unconfirmed',
+      valueUnit: 'Wh',
       timeZone: typeof timeZone === 'string' && timeZone ? timeZone : 'UTC',
+      localTime,
+      localDate,
+      endBoundaryDate,
+      lastRecordMatchesLocalDate,
       startTimestamp: energyData.start_timestamp ?? null,
       endTimestamp: energyData.end_timestamp,
       interval: energyData.interval,
-      alignmentVerified: false
+      alignmentVerified: Boolean(localDate && lastRecordDate === localDate)
     }
   };
 }
@@ -337,6 +434,12 @@ async function probeTapoThingCloud(options = {}) {
               '; start=' + history.meta.startTimestamp + '; end=' + history.meta.endTimestamp +
               '; запрошено точек=' + history.meta.requestedDays +
               '; получено=' + history.meta.returnedDays +
+              '; local_time=' + (history.meta.localTime || '—') +
+              '; local_date=' + (history.meta.localDate || '—') +
+              '; end_date=' + history.meta.endBoundaryDate +
+              '; последняя дата совпадает с local_date=' +
+                (history.meta.lastRecordMatchesLocalDate === null ? 'нет данных' :
+                  history.meta.lastRecordMatchesLocalDate ? 'да' : 'НЕТ') +
               '; даты предварительные, так как задержка данных устройства ещё не подтверждена.'
             : history.reason
         });
@@ -469,4 +572,4 @@ async function probeTapoThingCloud(options = {}) {
   }
 }
 
-module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory };
+module.exports = { probeTapoThingCloud, normalizeThing, diagnostic, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory };
