@@ -579,7 +579,7 @@ test('performs a second read-only usage request from the quarter boundary', asyn
         return {
           energy_data: {
             local_time: isPrimary ? '2026-11-26 23:44:26' : '2026-11-26 23:44:27',
-            data: isPrimary ? [0, 10, 20, 0, 30] : [0, 0, 10, 20, 0, 30],
+            data: isPrimary ? [0, 10, 20, 0, 30] : [100, 0, 10, 20, 0, 30],
             start_timestamp: range.start_timestamp,
             end_timestamp: range.end_timestamp,
             interval: 1440
