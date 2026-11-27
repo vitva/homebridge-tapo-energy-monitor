@@ -145,8 +145,21 @@ function normalizeDailyEnergyHistory(payload, timeZone = 'UTC') {
       .map(part => [part.type, Number(part.value)])
   );
   const endBoundary = Date.UTC(endParts.year, endParts.month - 1, endParts.day);
+  const localTime = typeof energyData.local_time === 'string' &&
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$/.test(energyData.local_time)
+    ? energyData.local_time
+    : null;
+  const localDate = localTime ? localTime.slice(0, 10) : null;
+  const localDateEpoch = localDate ? Date.parse(localDate + 'T00:00:00Z') : null;
+  const localDateOffset = localDateEpoch === null ? null : localDateEpoch - endBoundary;
+  // Tapo may return the end boundary during the current local day, or at
+  // the next local midnight. In either case the last bucket is localDate.
+  // Older partial responses remain anchored to their returned end_timestamp.
+  const lastRecordDay = localDateOffset === 0 || localDateOffset === -86400000
+    ? localDateEpoch
+    : endBoundary - 86400000;
   const records = energyData.data.map((value, index) => {
-    const day = new Date(endBoundary - (energyData.data.length - index) * 86400000);
+    const day = new Date(lastRecordDay - (energyData.data.length - 1 - index) * 86400000);
     return { date: day.toISOString().slice(0, 10), value };
   });
   const requestedDays = Number.isInteger(energyData.start_timestamp)
