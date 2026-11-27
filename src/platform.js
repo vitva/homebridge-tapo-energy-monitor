@@ -174,6 +174,7 @@ class TapoEnergyMonitorPlatform {
       this.cloudMatterMeterUuid = accessory.UUID;
       this.cloudMatterRegistrationRetryAt = 0;
       this.log.info('[MATTER CLOUD REGISTERED] %s | %s', accessory.UUID, accessory.displayName);
+      await this.restoreCloudMatterLastReading();
 
       // Do not remove the old simulation meter until the cloud endpoint is safely registered.
       if (typeof matter.unregisterPlatformAccessories === 'function') {
@@ -191,6 +192,41 @@ class TapoEnergyMonitorPlatform {
       this.cloudMatterMeterUuid = null;
       this.cloudMatterRegistrationRetryAt = Date.now() + 300000;
       this.log.warn('Cloud Matter meter registration failed; will retry after 5 minutes. Cloud history will continue: %s', error.message);
+    }
+  }
+
+  async restoreCloudMatterLastReading() {
+    const matter = this.api && this.api.matter;
+    if (!this.cloudMatterMeterUuid || typeof matter?.getAccessoryState !== 'function') return null;
+
+    try {
+      const energyCluster = matter.clusterNames?.ElectricalEnergyMeasurement || 'electricalEnergyMeasurement';
+      const state = await matter.getAccessoryState(this.cloudMatterMeterUuid, energyCluster);
+      const imported = state?.cumulativeEnergyImported;
+      const energyMWh = Number(imported?.energy);
+      const timestamp = Number(imported?.endTimestamp);
+
+      // A freshly created endpoint starts at zero. Restore only a real, positive
+      // cached cumulative value; otherwise the first cloud poll must not fabricate
+      // a periodic interval from the entire imported history.
+      if (Number.isFinite(energyMWh) && energyMWh > 0 &&
+        Number.isFinite(timestamp) && timestamp > 0) {
+        this.cloudMatterLastReading = {
+          cumulativeEnergyWh: energyMWh / 1000,
+          timestamp
+        };
+        this.log.info('[MATTER CLOUD RESTORE] %s | cumulative %s Wh | Matter timestamp %s',
+          this.cloudMatterMeterUuid, this.cloudMatterLastReading.cumulativeEnergyWh.toFixed(3), timestamp);
+        return this.cloudMatterLastReading;
+      }
+
+      this.log.info('[MATTER CLOUD RESTORE] %s | no previous positive cumulative reading in Matter cache',
+        this.cloudMatterMeterUuid);
+      return null;
+    } catch (error) {
+      this.log.warn('[MATTER CLOUD RESTORE] %s | could not restore previous reading: %s',
+        this.cloudMatterMeterUuid, error.message);
+      return null;
     }
   }
 
