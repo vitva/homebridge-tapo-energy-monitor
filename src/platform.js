@@ -7,7 +7,9 @@ const {
   PLUGIN_IDENTIFIER,
   PLATFORM_NAME,
   createEstimatedMeterAccessory,
-  updateEstimatedMeter
+  updateEstimatedMeter,
+  createCloudEnergyMeterAccessory,
+  updateCloudEnergyMeter
 } = require('./matter-meter');
 
 class TapoEnergyMonitorPlatform {
@@ -18,6 +20,7 @@ class TapoEnergyMonitorPlatform {
     this.timer = null;
     this.store = null;
     this.matterMeterUuid = null;
+    this.cloudMatterMeterUuid = null;
 
     api.on('didFinishLaunching', () => {
       this.start().catch(error => this.log.error('Could not start Tapo Energy Monitor: %s', error.message));
@@ -113,18 +116,18 @@ class TapoEnergyMonitorPlatform {
       username, password, log: this.log,
       termId: getStableTapoTermId(storageRoot)
     });
-    await this.registerMatterMeter();
+    await this.registerCloudMatterMeter();
     const configuredInterval = Number(this.config.pollingIntervalSeconds) || 900;
     const interval = Math.max(300, Math.min(3600, configuredInterval));
     const poll = async () => {
       try {
         const result = await this.cloudMonitor.poll(this.store);
-        if (this.matterMeterUuid) {
+        if (this.cloudMatterMeterUuid) {
           try {
-            const meter = await updateEstimatedMeter(this.api, this.matterMeterUuid, this.store.getSummary());
+            const meter = await updateCloudEnergyMeter(this.api, this.cloudMatterMeterUuid, this.store.getSummary());
             if (meter) {
-              this.log.info('[MATTER CLOUD] estimated meter: %s W | cumulative cloud energy: %s Wh',
-                meter.activePowerW.toFixed(1), meter.cumulativeEnergyWh.toFixed(2));
+              this.log.info('[MATTER CLOUD TEST] cumulative imported cloud energy: %s Wh',
+                meter.cumulativeEnergyWh.toFixed(2));
             }
           } catch (error) {
             this.log.warn('Matter cloud energy update failed; cloud history will continue: %s', error.message);
@@ -139,6 +142,24 @@ class TapoEnergyMonitorPlatform {
     await poll();
     this.timer = setInterval(poll, interval * 1000);
     this.log.info('Tapo Cloud daily energy history polling started (every %s seconds).', interval);
+  }
+
+  async registerCloudMatterMeter() {
+    if (this.config.enableMatterMeter === false) return;
+
+    const accessory = createCloudEnergyMeterAccessory(this.api, this.config.cloudMatterMeterName || 'Tapo Energy — Облако (тест)');
+    if (!accessory) {
+      this.log.warn('Cloud Matter meter not registered. Enable Matter on this Homebridge bridge and use Homebridge 2.5.0 or later for Electrical Meter support.');
+      return;
+    }
+
+    try {
+      await this.api.matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
+      this.cloudMatterMeterUuid = accessory.UUID;
+      this.log.info('Real Tapo cloud energy Matter meter registered: %s', accessory.displayName);
+    } catch (error) {
+      this.log.warn('Cloud Matter meter registration failed; cloud history will continue: %s', error.message);
+    }
   }
 
   async registerMatterMeter() {
