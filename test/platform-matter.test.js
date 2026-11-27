@@ -165,3 +165,52 @@ test('registers a separate real cloud energy meter for cloud mode', async () => 
   assert.equal(platform.cloudMatterMeterUuid, accessory.UUID);
   assert.equal(platform.matterMeterUuid, null);
 });
+
+
+test('keeps the previous estimated meter when cloud Matter registration fails', async () => {
+  const unregistered = [];
+  const matter = {
+    uuid: { generate: value => 'uuid:' + value },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType' },
+    unregisterPlatformAccessories: async (...args) => unregistered.push(args),
+    registerPlatformAccessories: async () => { throw new Error('Matter bridge temporarily unavailable'); }
+  };
+  const { platform, warnings } = makePlatform({}, matter);
+  await platform.registerCloudMatterMeter();
+
+  assert.equal(unregistered.length, 0);
+  assert.equal(platform.cloudMatterMeterUuid, null);
+  assert.ok(platform.cloudMatterRegistrationRetryAt > Date.now());
+  assert.match(warnings[0], /will retry after 5 minutes/);
+});
+
+test('reports Matter disabled explicitly without attempting accessory registration', async () => {
+  const { platform, warnings } = makePlatform({}, undefined);
+  await platform.registerCloudMatterMeter();
+
+  assert.equal(platform.cloudMatterMeterUuid, null);
+  assert.match(warnings[0], /Matter is not enabled/);
+});
+
+test('keeps a successful Matter update successful when readback independently fails', async () => {
+  const warnings = [];
+  const updates = [];
+  const matter = {
+    clusterNames: { ElectricalEnergyMeasurement: 'electricalEnergyMeasurement' },
+    updateAccessoryState: async (...args) => updates.push(args),
+    getAccessoryState: async () => { throw new Error('readback unavailable'); }
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.log.warn = message => warnings.push(message);
+  platform.cloudMatterMeterUuid = 'cloud-meter-uuid';
+
+  const result = await platform.publishCloudMatterReading({
+    devices: { cloudA: { source: 'tapo_cloud', energyWh: 125.5 } }
+  });
+
+  assert.equal(result.cumulativeEnergyWh, 125.5);
+  assert.equal(updates.length, 1);
+  assert.equal(platform.cloudMatterLastReading.cumulativeEnergyWh, 125.5);
+  assert.match(warnings[0], /MATTER CLOUD READBACK.*readback failed/);
+  assert.equal(warnings.some(message => /Matter cloud energy update failed/.test(message)), false);
+});
