@@ -98,7 +98,7 @@ class EnergyStore {
     // invalidate only that month's cached aggregate until a fresh monthly
     // snapshot arrives; older monthly totals remain authoritative.
     if (typeof metadata.latestDate === 'string' &&
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(metadata.latestDate)) {
+        /^\d{4}-\d{2}-\d{2}$/.test(metadata.latestDate)) {
       delete energyByMonth[metadata.latestDate.slice(0, 7)];
     }
     this.state.devices[deviceId] = {
