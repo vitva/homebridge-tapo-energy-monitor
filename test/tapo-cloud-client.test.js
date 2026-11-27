@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, normalizeDailyEnergyHistory } = require('../src/tapo-cloud-client');
+const { probeTapoThingCloud, normalizeThing, buildDailyUsageRange, buildQuarterStartTimestamp, buildYearlyUsageRange, normalizeDailyEnergyHistory, normalizeMonthlyEnergyHistory } = require('../src/tapo-cloud-client');
 
 test('normalizes Thing devices without exposing raw records', () => {
   assert.deepEqual(normalizeThing({
@@ -464,6 +464,49 @@ test('keeps daily date alignment correct across daylight-saving transitions', ()
   assert.equal(parsed.ok, true);
   assert.equal(parsed.records.length, 3);
   assert.equal(parsed.records[2].date, '2026-03-30');
+});
+
+test('builds a timezone-aware January-to-January monthly energy range', () => {
+  const range = buildYearlyUsageRange('Europe/Moscow', Date.UTC(2026, 5, 15, 12));
+  assert.equal(range.interval, 43200);
+  const start = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date(range.start_timestamp * 1000));
+  const end = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date(range.end_timestamp * 1000));
+  assert.equal(start, '01/01/2026');
+  assert.equal(end, '01/01/2027');
+});
+
+test('normalizes Tapo monthly history values to Wh by calendar month', () => {
+  const parsed = normalizeMonthlyEnergyHistory({
+    energy_data: {
+      data: [1000, 2000, 3000],
+      start_timestamp: Date.UTC(2026, 0, 1) / 1000,
+      end_timestamp: Date.UTC(2026, 3, 1) / 1000,
+      interval: 43200
+    }
+  }, 'UTC');
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.records, [
+    { month: '2026-01', value: 1000 },
+    { month: '2026-02', value: 2000 },
+    { month: '2026-03', value: 3000 }
+  ]);
+  assert.equal(parsed.meta.valueUnit, 'Wh');
+});
+
+test('rejects monthly cloud history that does not start on January 1', () => {
+  const parsed = normalizeMonthlyEnergyHistory({
+    energy_data: {
+      data: [1000],
+      start_timestamp: Date.UTC(2026, 1, 1) / 1000,
+      end_timestamp: Date.UTC(2026, 2, 1) / 1000,
+      interval: 43200
+    }
+  }, 'UTC');
+  assert.equal(parsed.ok, false);
 });
 
 test('does not interpret an unknown usage response as daily history', () => {
