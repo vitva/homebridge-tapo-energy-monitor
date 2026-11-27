@@ -19,4 +19,10 @@ test('initializes cloud dashboard state before reading it', () => {
     'activeDevices must be initialized before primaryCloudDevice reads it');
   assert.ok(cloudHistory >= 0 && cloudHistory < todayWh,
     'cloudHistory must be initialized before todayWh reads it');
+  assert.ok(refresh.includes('latestCommonDate'),
+    'cloud dashboard must fall back to the latest date complete across active devices');
+  assert.ok(refresh.includes("byId('month').textContent") && refresh.includes("byId('year').textContent"),
+    'cloud dashboard must expose monthly and yearly totals without requiring a daily bucket');
+  assert.ok(html.includes('id="month"') && html.includes('id="year"'),
+    'monthly and yearly summary cards must exist');
 });
