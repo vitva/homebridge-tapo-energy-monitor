@@ -82,7 +82,11 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
       electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: {
         cumulativeEnergyImported: { energy: 0, endTimestamp: timestamp },
-        periodicEnergyImported: null
+        periodicEnergyImported: {
+          energy: 0,
+          startTimestamp: Math.max(MIN_MATTER_EPOCH_SECONDS, timestamp - 1),
+          endTimestamp: timestamp
+        }
       }
     }
   };
