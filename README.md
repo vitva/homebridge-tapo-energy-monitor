@@ -2,6 +2,13 @@
 
 Homebridge 2 plugin for importing Tapo energy history through the TP-Link cloud. The Homebridge host does not need to share a local network with the plugs.
 
+## Beta 0.2.0-beta.19
+
+- Corrected daily history quality handling: trailing zero buckets that conflict with authoritative monthly totals are treated as unavailable rather than real zero consumption.
+- Unavailable daily values are shown as `—`; valid earlier daily readings are retained.
+- Archived-device daily values are limited to the actual current date instead of reusing the last historical date.
+- The Matter `ElectricalMeter` endpoint now declares both required electrical power and energy measurement clusters. Since Tapo Cloud does not provide a verified live-power sample, active power is reported as unavailable (`null`), not as a fabricated zero.
+
 ## Current beta implementation
 
 - **P110M cloud history:** Node.js account authentication, Thing Cloud discovery and read-only daily and monthly `/usage` requests.
@@ -17,7 +24,7 @@ The cloud collector currently supports **P110M only**. S112 and S110E are not ye
 
 ## Matter test meter
 
-With Matter enabled and Homebridge 2.5.0 or later, cloud mode registers a separate test accessory named **Tapo Energy — Облако (тест)**. It publishes imported cloud energy through Matter `ElectricalMeter`; it deliberately does not publish active power because verified live W samples are not available.
+With Matter enabled and Homebridge 2.5.0 or later, cloud mode registers a separate test accessory named **Tapo Energy — Облако (тест)**. It publishes imported cloud energy through Matter `ElectricalMeter` and declares the required electrical power measurement cluster. Active power is unavailable (`null`) because verified live W samples are not available; the plugin does not fabricate a zero-watt reading.
 
 The Matter energy value is the sum of the cloud monthly history currently imported and retained by the plugin. It is **not a verified lifetime/billing counter**. On a fresh installation, the available cloud series initially covers the current calendar year. Treat this accessory as a beta presentation test, not as a billing meter. The simulation accessory remains separate and is not mixed with cloud values. When switching from simulation to cloud mode, the previous estimated meter is unregistered where Homebridge supports that operation.
 
