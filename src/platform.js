@@ -159,11 +159,12 @@ class TapoEnergyMonitorPlatform {
 
     // Remove the previous cloud-mode prototype that reused the simulation meter identity.
     // This prevents HomeKit from retaining a misleading "Расчётная" meter beside the real one.
-    if (typeof this.api.unregisterPlatformAccessories === 'function') {
+    const matter = this.api && this.api.matter;
+    if (matter && typeof matter.unregisterPlatformAccessories === 'function') {
       const previousEstimated = createEstimatedMeterAccessory(this.api, this.config.matterMeterName || 'Tapo Energy — Расчётная');
       if (previousEstimated) {
         try {
-          await this.api.unregisterPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [previousEstimated]);
+          await matter.unregisterPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [previousEstimated]);
           this.log.info('Removed the previous estimated Matter meter from cloud mode.');
         } catch (error) {
           this.log.warn('Could not remove the previous estimated Matter meter: %s', error.message);
