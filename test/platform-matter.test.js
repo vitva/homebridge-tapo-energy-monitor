@@ -337,3 +337,61 @@ test('keeps cloud operation available when Matter accessory construction throws'
   assert.equal(platform.cloudMatterMeterUuid, null);
   assert.match(warnings[0], /UUID service unavailable/);
 });
+
+
+test('registers a separate ElectricalSensor comparison accessory without replacing the cloud meter', async () => {
+  const registered = [];
+  const matter = {
+    uuid: { generate: value => 'uuid:' + value },
+    deviceTypes: { ElectricalMeter: 'ElectricalMeterType', ElectricalSensor: 'ElectricalSensorType' },
+    registerPlatformAccessories: async (...args) => registered.push(args)
+  };
+  const { platform } = makePlatform({}, matter);
+  const result = await platform.registerCloudMatterSensorTest();
+
+  assert.equal(result, true);
+  assert.equal(registered.length, 1);
+  const accessory = registered[0][2][0];
+  assert.equal(accessory.UUID, 'uuid:tapo-energy-cloud-sensor-test');
+  assert.equal(accessory.deviceType, 'ElectricalSensorType');
+  assert.equal(accessory.displayName, 'Tapo Energy — Датчик (тест)');
+  assert.equal(platform.cloudMatterSensorTestUuid, accessory.UUID);
+  assert.equal(platform.cloudMatterMeterUuid, null);
+});
+
+test('publishes the same cloud energy reading to the ElectricalSensor test endpoint', async () => {
+  const updates = [];
+  const matter = {
+    clusterNames: { ElectricalEnergyMeasurement: 'energy-cluster' },
+    updateAccessoryState: async (...args) => updates.push(args),
+    getAccessoryState: async () => ({
+      cumulativeEnergyImported: { energy: 123450, endTimestamp: 1800000000 },
+      periodicEnergyImported: { energy: 45670, startTimestamp: 1798761600, endTimestamp: 1800000000 }
+    })
+  };
+  const { platform } = makePlatform({}, matter);
+  platform.cloudMatterMeterUuid = 'cloud-meter';
+  platform.cloudMatterSensorTestUuid = 'cloud-sensor-test';
+  const summary = {
+    devices: {
+      cloudA: {
+        source: 'tapo_cloud',
+        active: true,
+        energyWh: 123.45,
+        timeZone: 'UTC',
+        energyByMonth: { '2027-01': 45.67 }
+      }
+    }
+  };
+
+  const result = await platform.publishCloudMatterReading(summary);
+
+  assert.equal(result.cumulativeEnergyWh, 123.45);
+  assert.equal(updates.length, 2);
+  assert.equal(updates[0][0], 'cloud-meter');
+  assert.equal(updates[1][0], 'cloud-sensor-test');
+  assert.deepEqual(updates[1][2].cumulativeEnergyImported, {
+    energy: 123450,
+    endTimestamp: result.timestamp
+  });
+});

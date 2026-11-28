@@ -161,6 +161,7 @@ jobs:
                   await this.registerMatterMeter();
                   await this.registerCloudMatterMeter();
                   if (!this.cloudMatterMeterUuid) throw new Error('Cloud Matter endpoint was not registered.');
+                  if (!this.cloudMatterSensorTestUuid) throw new Error('ElectricalSensor comparison endpoint was not registered.');
           
                   const monthKey = new Date().toISOString().slice(0, 7);
                   const summary = {
@@ -187,6 +188,16 @@ jobs:
                   if (!Number.isFinite(periodic) || periodic !== 123456) {
                     throw new Error('Cloud Matter periodic readback mismatch: ' + JSON.stringify(state));
                   }
+                  const sensorState = await this.api.matter.getAccessoryState(
+                    this.cloudMatterSensorTestUuid,
+                    cluster
+                  );
+                  const sensorEnergy = Number(sensorState?.cumulativeEnergyImported?.energy);
+                  const sensorPeriodic = Number(sensorState?.periodicEnergyImported?.energy);
+                  if (sensorEnergy !== 123456 || sensorPeriodic !== 123456) {
+                    throw new Error('ElectricalSensor energy readback mismatch: ' + JSON.stringify(sensorState));
+                  }
+                  this.log.info('[MATTER SENSOR CI] ElectricalSensor energy readback verified: cumulative %s mWh; periodic %s mWh', sensorEnergy, sensorPeriodic);
                   this.log.info('[MATTER CLOUD CI] endpoint and energy readback verified: cumulative %s mWh; periodic %s mWh', energy, periodic);
                 }
               });
@@ -224,6 +235,7 @@ jobs:
             exit 1
           fi
           grep -q "\\[MATTER CLOUD CI\\] endpoint and energy readback verified: cumulative 123456 mWh; periodic 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
+          grep -q "\\[MATTER SENSOR CI\\] ElectricalSensor energy readback verified: cumulative 123456 mWh; periodic 123456 mWh" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"
           if grep -q "violates device type requirements" "$RUNNER_TEMP/homebridge-matter-cloud-runtime.log"; then
             echo "Cloud Matter endpoint violates device type requirements." >&2
             exit 1

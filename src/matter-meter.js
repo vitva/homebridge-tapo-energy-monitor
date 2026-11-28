@@ -4,6 +4,7 @@ const PLUGIN_IDENTIFIER = 'homebridge-tapo-energy-monitor';
 const PLATFORM_NAME = 'TapoEnergyMonitor';
 const METER_ID = 'tapo-energy-estimated-total';
 const CLOUD_METER_ID = 'tapo-energy-cloud-total';
+const CLOUD_SENSOR_TEST_ID = 'tapo-energy-cloud-sensor-test';
 // Matter ElectricalEnergyMeasurement epoch-s is validated as Unix seconds by Matter.js.
 const MIN_MATTER_EPOCH_SECONDS = 946684800;
 
@@ -78,6 +79,37 @@ function createCloudEnergyMeterAccessory(api, displayName = 'Tapo Energy — О�
     // Tapo Cloud does not provide a trustworthy live-power sample, so null is
     // the Matter-defined "no reading available" value, not a fabricated zero.
     // Keep both imported-energy features declared at registration time.
+    clusters: {
+      electricalPowerMeasurement: { activePower: null },
+      electricalEnergyMeasurement: {
+        cumulativeEnergyImported: { energy: 0, endTimestamp: timestamp },
+        periodicEnergyImported: {
+          energy: 0,
+          startTimestamp: Math.max(MIN_MATTER_EPOCH_SECONDS, timestamp - 1),
+          endTimestamp: timestamp
+        }
+      }
+    }
+  };
+}
+
+function createCloudEnergySensorAccessory(api, displayName = 'Tapo Energy — Датчик (тест)') {
+  const matter = api && api.matter;
+  if (!matter || !matter.deviceTypes || !matter.deviceTypes.ElectricalSensor || !matter.uuid) {
+    return null;
+  }
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  return {
+    UUID: matter.uuid.generate(CLOUD_SENSOR_TEST_ID),
+    displayName,
+    deviceType: matter.deviceTypes.ElectricalSensor,
+    manufacturer: 'Tapo Energy Monitor',
+    model: 'P110M cloud energy history (ElectricalSensor test)',
+    serialNumber: 'TAPO-ENERGY-CLOUD-SENSOR-TEST',
+    context: { meterId: CLOUD_SENSOR_TEST_ID, measurementSource: 'tapo_cloud', testBuild: true },
+    // Homebridge 2.5.0 auto-detects these clusters and adds the required
+    // PowerTopology(TreeTopology) behavior for the ElectricalSensor endpoint.
     clusters: {
       electricalPowerMeasurement: { activePower: null },
       electricalEnergyMeasurement: {
@@ -176,5 +208,6 @@ module.exports = {
   createEstimatedMeterAccessory,
   updateEstimatedMeter,
   createCloudEnergyMeterAccessory,
+  createCloudEnergySensorAccessory,
   updateCloudEnergyMeter
 };

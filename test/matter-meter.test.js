@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createEstimatedMeterAccessory, updateEstimatedMeter, createCloudEnergyMeterAccessory, updateCloudEnergyMeter } = require('../src/matter-meter');
+const { createEstimatedMeterAccessory, updateEstimatedMeter, createCloudEnergyMeterAccessory, createCloudEnergySensorAccessory, updateCloudEnergyMeter } = require('../src/matter-meter');
 
 function mockApi() {
   const updates = [];
@@ -203,4 +203,18 @@ test('does not derive periodic usage from cumulative corrections when monthly hi
 
   assert.equal(result.periodicEnergyWh, null);
   assert.equal(updates[0][2].periodicEnergyImported, null);
+});
+
+
+test('creates an isolated Matter ElectricalSensor comparison accessory for cloud energy', () => {
+  const { api } = mockApi();
+  api.matter.deviceTypes.ElectricalSensor = 'ElectricalSensorType';
+  const accessory = createCloudEnergySensorAccessory(api);
+  assert.equal(accessory.UUID, 'uuid:tapo-energy-cloud-sensor-test');
+  assert.equal(accessory.deviceType, 'ElectricalSensorType');
+  assert.equal(accessory.context.measurementSource, 'tapo_cloud');
+  assert.equal(accessory.context.testBuild, true);
+  assert.equal(accessory.clusters.electricalPowerMeasurement.activePower, null);
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.cumulativeEnergyImported.energy, 0);
+  assert.equal(accessory.clusters.electricalEnergyMeasurement.periodicEnergyImported.energy, 0);
 });
