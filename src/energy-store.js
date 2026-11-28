@@ -36,6 +36,8 @@ class EnergyStore {
       };
       for (const device of Object.values(this.state.devices)) {
         device.totals = device.totals || emptyTotals();
+        device.energyByDay = device.energyByDay || {};
+        device.energyByMonth = device.energyByMonth || {};
         device.energyWh = Number.isFinite(device.energyWh) ? device.energyWh : 0;
       }
     } catch (error) {
@@ -47,6 +49,11 @@ class EnergyStore {
     const activeIds = new Set(deviceIds);
     for (const [deviceId, device] of Object.entries(this.state.devices)) {
       device.active = activeIds.has(deviceId);
+    }
+    // Cloud combined totals must stop counting devices that disappeared from
+    // the live account, while their per-device history remains available.
+    if (Object.values(this.state.devices).some(device => device?.source === 'tapo_cloud')) {
+      this.rebuildCloudTotals();
     }
     this.save();
   }
@@ -76,6 +83,118 @@ class EnergyStore {
       totals: previous.totals
     };
     this.save();
+  }
+
+  recordDailyEnergy(deviceId, records, metadata = {}) {
+    if (typeof deviceId !== 'string' || !deviceId.trim() || !Array.isArray(records)) return;
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {}, energyByMonth: {} };
+    const energyByDay = { ...(previous.energyByDay || {}) };
+    let accepted = 0;
+    for (const record of records) {
+      if (!record || typeof record.date !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(record.date) ||
+          !Number.isFinite(record.value) || record.value < 0) continue;
+      energyByDay[record.date] = record.value;
+      accepted += 1;
+    }
+    const invalidFromDate = typeof metadata.invalidFromDate === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(metadata.invalidFromDate)
+      ? metadata.invalidFromDate : null;
+    const latestDate = typeof metadata.latestDate === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(metadata.latestDate)
+      ? metadata.latestDate : null;
+    if (invalidFromDate && latestDate && invalidFromDate <= latestDate) {
+      for (const date of Object.keys(energyByDay)) {
+        if (date >= invalidFromDate && date <= latestDate) delete energyByDay[date];
+      }
+    }
+    if (!accepted && !invalidFromDate) return;
+    const energyByMonth = { ...(previous.energyByMonth || {}) };
+    // The daily endpoint covers the current quarter. Its latest day lets us
+    // invalidate only that month's cached aggregate until a fresh monthly
+    // snapshot arrives; older monthly totals remain authoritative.
+    if (typeof metadata.latestDate === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(metadata.latestDate)) {
+      delete energyByMonth[metadata.latestDate.slice(0, 7)];
+    }
+    this.state.devices[deviceId] = {
+      ...previous,
+      id: deviceId,
+      active: true,
+      name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
+      model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
+      source: 'tapo_cloud',
+      timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
+      latestDate: typeof metadata.latestDate === 'string' ? metadata.latestDate : (previous.latestDate || null),
+      energyByDay,
+      energyByMonth
+    };
+    this.rebuildCloudTotals();
+    this.save();
+  }
+
+  recordMonthlyEnergy(deviceId, records, metadata = {}) {
+    if (typeof deviceId !== 'string' || !deviceId.trim() || !Array.isArray(records)) return;
+    const previous = this.state.devices[deviceId] || { energyWh: 0, totals: emptyTotals(), energyByDay: {}, energyByMonth: {} };
+    const energyByMonth = { ...(previous.energyByMonth || {}) };
+    let accepted = 0;
+    for (const record of records) {
+      if (!record || typeof record.month !== 'string' ||
+          !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(record.month) ||
+          !Number.isFinite(record.value) || record.value < 0) continue;
+      energyByMonth[record.month] = record.value;
+      accepted += 1;
+    }
+    if (!accepted) return;
+    this.state.devices[deviceId] = {
+      ...previous,
+      id: deviceId,
+      active: true,
+      name: typeof metadata.name === 'string' && metadata.name.trim() ? metadata.name.trim() : (previous.name || deviceId),
+      model: typeof metadata.model === 'string' ? metadata.model : (previous.model || ''),
+      source: 'tapo_cloud',
+      timeZone: typeof metadata.timeZone === 'string' ? metadata.timeZone : (previous.timeZone || 'UTC'),
+      energyByMonth
+    };
+    this.rebuildCloudTotals();
+    this.save();
+  }
+
+  rebuildCloudTotals() {
+    const totals = emptyTotals();
+    for (const device of Object.values(this.state.devices)) {
+      if (!device || device.source !== 'tapo_cloud') continue;
+      const daily = emptyTotals();
+      const dailyMonthly = {};
+      for (const [date, value] of Object.entries(device.energyByDay || {})) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(value) || value < 0) continue;
+        const [year, month] = date.split('-');
+        daily.daily[date] = value;
+        const monthKey = year + '-' + month;
+        dailyMonthly[monthKey] = (dailyMonthly[monthKey] || 0) + value;
+      }
+      const monthly = { ...dailyMonthly, ...(device.energyByMonth || {}) };
+      const yearly = {};
+      for (const [monthKey, value] of Object.entries(monthly)) {
+        if (!/^\d{4}-(?:0[1-9]|1[0-2])$/.test(monthKey) || !Number.isFinite(value) || value < 0) continue;
+        const year = monthKey.slice(0, 4);
+        yearly[year] = (yearly[year] || 0) + value;
+        if (device.active !== false) totals.monthly[monthKey] = (totals.monthly[monthKey] || 0) + value;
+      }
+      for (const [date, value] of Object.entries(daily.daily)) {
+        if (device.active !== false) totals.daily[date] = (totals.daily[date] || 0) + value;
+      }
+      if (device.active !== false) {
+        for (const [year, value] of Object.entries(yearly)) {
+          totals.yearly[year] = (totals.yearly[year] || 0) + value;
+        }
+      }
+      // Preserve archived device totals for inspection, but exclude them from
+      // the combined account totals above.
+      device.totals = { daily: daily.daily, monthly, yearly };
+      device.energyWh = Object.values(monthly).reduce((sum, value) => sum + value, 0);
+    }
+    this.state.totals = totals;
   }
 
   addEnergy(date, energyWh, totals) {

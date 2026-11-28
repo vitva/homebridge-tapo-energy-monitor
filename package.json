@@ -1,11 +1,11 @@
 {
   "name": "homebridge-tapo-energy-monitor",
-  "version": "0.2.0",
+  "version": "0.2.0-beta.28",
   "description": "Cloud-based Tapo energy monitoring and consumption history for Homebridge",
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/matter-meter.js && node --check src/tapo-cloud.js && node --check test/energy-store.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check test/tapo-cloud.test.js && node --check homebridge-ui/server.js"
+    "lint": "node --check index.js && node --check src/platform.js && node --check src/energy-store.js && node --check src/watt-csv.js && node --check src/matter-meter.js && node --check src/tapo-cloud-client.js && node --check src/tapo-cloud-monitor.js && node --check src/tapo-cloud-identity.js && node --check src/tapo-cloud-auth.js && node --check src/tapo-thing-api.js && node --check test/tapo-cloud-monitor.test.js && node --check test/tapo-cloud-identity.test.js && node --check test/energy-store.test.js && node --check test/watt-csv.test.js && node --check test/matter-meter.test.js && node --check test/platform-matter.test.js && node --check test/tapo-cloud-client.test.js && node --check test/tapo-cloud-auth.test.js && node --check test/tapo-thing-api.test.js && node --check homebridge-ui/server.js"
   },
   "keywords": [
     "homebridge-plugin",
@@ -19,7 +19,7 @@
   ],
   "engines": {
     "node": "^22.12.0 || ^24.0.0 || ^26.0.0",
-    "homebridge": ">=2.2.0"
+    "homebridge": ">=2.5.0"
   },
   "dependencies": {
     "@homebridge/plugin-ui-utils": "^2.3.0"
@@ -28,7 +28,7 @@
     "homebridge": "2.5.0"
   },
   "peerDependencies": {
-    "homebridge": ">=2.2.0"
+    "homebridge": ">=2.5.0"
   },
   "peerDependenciesMeta": {
     "homebridge": {
@@ -38,16 +38,14 @@
   "files": [
     "index.js",
     "src/",
-    "helpers/tapo_cloud_probe.py",
     "helpers/tplink-cloud-server-ca.pem",
     "config.schema.json",
     "README.md",
-    "requirements-cloud.txt",
     "homebridge-ui/"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vitva/homebridge-tapo-energy-monitor.git"
+    "url": "git+https://github.com/vitva/homebridge-tapo-energy-monitor.git"
   },
   "homepage": "https://github.com/vitva/homebridge-tapo-energy-monitor",
   "bugs": {

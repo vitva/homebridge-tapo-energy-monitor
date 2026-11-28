@@ -2,7 +2,7 @@
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
     <div>
       <h3 class="mb-1">Tapo Energy Monitor</h3>
-      <div class="text-muted small">Local energy history · prototype / simulated readings</div>
+      <div class="text-muted small">Tapo Cloud energy history · daily Wh readings</div>
     </div>
     <button id="refresh" class="btn btn-primary">Refresh</button>
   </div>
@@ -11,14 +11,16 @@
   <div id="dashboard" hidden>
     <div class="row g-3 mb-3">
       <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Current combined power</div><div class="fs-3 fw-semibold" id="power">—</div></div></div></div>
-      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Today · combined</div><div class="fs-3 fw-semibold" id="today">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small" id="today-label">Today · combined</div><div class="fs-3 fw-semibold" id="today">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">This month · combined</div><div class="fs-3 fw-semibold" id="month">—</div></div></div></div>
+      <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">This year · combined</div><div class="fs-3 fw-semibold" id="year">—</div></div></div></div>
       <div class="col-12 col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small">Devices in history</div><div class="fs-3 fw-semibold" id="count">—</div></div></div></div>
     </div>
 
     <h5 class="mt-4">Devices</h5>
     <div class="table-responsive">
       <table class="table table-sm align-middle">
-        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">Estimated total</th><th class="text-end">Today</th></tr></thead>
+        <thead><tr><th>Device</th><th>Model</th><th>Status</th><th class="text-end">Power</th><th class="text-end">History total</th><th class="text-end">This month</th><th class="text-end">Latest verified day</th></tr></thead>
         <tbody id="devices"></tbody>
       </table>
     </div>
@@ -34,11 +36,11 @@
   </div>
   <hr class="my-4">
   <h5>Проверка облака TP-Link Tapo</h5>
-  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Пароль и MFA-код используются только для этой проверки и не сохраняются в настройках плагина.</p>
+  <p class="text-muted small">Проверка выполняется через аккаунт Tapo и облачный сервер TP-Link. Локальная сеть дачи и IP-адрес розетки не нужны. Email и пароль записываются в config.json Homebridge после завершения проверки и используются повторно после перезапуска. Если TP-Link запросит MFA, пароль остаётся только в открытой форме настроек до повторной проверки; одноразовый MFA-код не сохраняется. Пароль хранится в открытом виде — защитите config.json и резервные копии. Подключение выполняется штатным Node.js-клиентом внутри Homebridge.</p>
   <div class="row g-2">
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-email">Email аккаунта Tapo</label><input id="tapo-email" class="form-control" type="email" autocomplete="username"></div>
     <div class="col-12 col-md-4"><label class="form-label" for="tapo-password">Пароль аккаунта Tapo</label><input id="tapo-password" class="form-control" type="password" autocomplete="current-password"></div>
-    <div class="col-12 col-md-4"><label class="form-label" for="tapo-mfa">Код подтверждения (если запрошен)</label><input id="tapo-mfa" class="form-control" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
+    <div class="col-12 col-md-4" id="tapo-mfa-wrap" hidden><label class="form-label" for="tapo-mfa">Код подтверждения TP-Link</label><input id="tapo-mfa" class="form-control" type="text" inputmode="numeric" autocomplete="one-time-code"></div>
   </div>
   <div class="d-flex align-items-center gap-3 mt-3">
     <button id="tapo-test" class="btn btn-primary" type="button">Проверить подключение к Tapo</button>
@@ -46,8 +48,19 @@
   </div>
   <div id="tapo-test-result" class="mt-3" aria-live="polite"></div>
   <hr class="my-4">
+  <hr class="my-4">
+  <h5>Импорт контрольной истории Watt</h5>
+  <p class="text-muted small">CSV хранится отдельно от рабочих показаний и Matter-счётчика. Повторный импорт заменяет предыдущую выгрузку того же типа.</p>
+  <div class="row g-2 align-items-end">
+    <div class="col-12 col-md-3"><label class="form-label" for="watt-kind">Тип выгрузки</label><select id="watt-kind" class="form-select"><option value="individual">Одно устройство</option><option value="aggregate">Все устройства</option></select></div>
+    <div class="col-12 col-md-3" id="watt-label-wrap"><label class="form-label" for="watt-label">Название устройства</label><input id="watt-label" class="form-control" type="text" value="P110M"></div>
+    <div class="col-12 col-md-4"><label class="form-label" for="watt-file">CSV из Watt</label><input id="watt-file" class="form-control" type="file" accept=".csv,text/csv"></div>
+    <div class="col-12 col-md-2"><button id="watt-import" class="btn btn-primary w-100" type="button">Импортировать</button></div>
+  </div>
+  <div id="watt-status" class="small mt-2" role="status"></div>
+  <div id="watt-results" class="mt-3"></div>
   <h5>Platform settings</h5>
-  <p class="text-muted small">Configure simulation devices and polling below. Cloud diagnostics do not yet feed the energy-history totals.</p>
+  <p class="text-muted small">Configure simulation devices and polling below. Tapo Cloud daily history is imported automatically when account credentials are configured. Simulation is optional and separate.</p>
   <div id="settings-form"></div>
 </div>
 
@@ -59,7 +72,6 @@
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  let tapoCloudPython = 'python3';
 
   function showMessage(message, type = 'secondary') {
     const status = byId('status');
@@ -91,12 +103,45 @@
 
       const data = result.data;
       const devices = Object.values(data.devices || {});
-      const todayKey = localDay();
-      const todayWh = data.totals?.daily?.[todayKey] || 0;
       const activeDevices = devices.filter(device => device.active !== false);
+      const cloudDevices = activeDevices.filter(device => device.source === 'tapo_cloud');
+      const cloudHistory = cloudDevices.length > 0;
+      const primaryCloudDevice = cloudDevices.find(device => device.latestDate);
+      const todayKey = primaryCloudDevice ? primaryCloudDevice.latestDate : localDay();
+      // Combined cloud totals use active devices only; archived contributions
+      // are displayed separately below without being added to account totals.
+      const hasDailyValue = (device, date) => Object.prototype.hasOwnProperty.call(device.totals?.daily || {}, date);
+      const todayKnown = !cloudHistory || cloudDevices.every(device => hasDailyValue(device, todayKey));
+      // If the current day's bucket is unverified/missing, show the latest date
+      // for which every active cloud device has a verified daily value.
+      const latestCommonDate = cloudHistory && cloudDevices.length
+        ? Object.keys(cloudDevices[0].totals?.daily || {})
+          .filter(date => cloudDevices.every(device => hasDailyValue(device, date)))
+          .sort()
+          .at(-1) || null
+        : null;
+      const displayedDayKey = cloudHistory && !todayKnown ? latestCommonDate : todayKey;
+      const displayedDayKnown = !cloudHistory || Boolean(displayedDayKey &&
+        cloudDevices.every(device => hasDailyValue(device, displayedDayKey)));
+      const todayWh = cloudHistory
+        ? (displayedDayKnown ? cloudDevices.reduce((sum, device) => sum + Number(device.totals.daily[displayedDayKey]), 0) : null)
+        : (data.totals?.daily?.[todayKey] || 0);
+      const archivedDevices = devices.filter(device => device.active === false);
+      const archivedTodayDevices = archivedDevices.filter(device => hasDailyValue(device, displayedDayKey));
+      const archivedTodayWh = archivedTodayDevices.reduce((sum, device) =>
+        sum + Number(device.totals.daily[displayedDayKey]), 0);
       const currentPower = activeDevices.reduce((sum, device) => sum + Number(device.powerW || 0), 0);
-      byId('power').textContent = number(currentPower, 1) + ' W';
-      byId('today').textContent = number(todayWh / 1000, 3) + ' kWh';
+      const monthKey = todayKey.slice(0, 7);
+      const yearKey = todayKey.slice(0, 4);
+      byId('power').textContent = cloudHistory && activeDevices.every(device => !Number.isFinite(device.powerW)) ? '—' : number(currentPower, 1) + ' W';
+      const monthWh = data.totals?.monthly?.[monthKey];
+      const yearWh = data.totals?.yearly?.[yearKey];
+      byId('today-label').textContent = displayedDayKey && displayedDayKey !== todayKey
+        ? 'Latest verified day · combined (' + displayedDayKey + ')'
+        : displayedDayKey ? 'Today · combined' : 'No verified daily value · combined';
+      byId('today').textContent = todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh';
+      byId('month').textContent = Number.isFinite(monthWh) ? number(monthWh / 1000, 3) + ' kWh' : '—';
+      byId('year').textContent = Number.isFinite(yearWh) ? number(yearWh / 1000, 3) + ' kWh' : '—';
       byId('count').textContent = activeDevices.length + ' active';
 
       const body = byId('devices');
@@ -106,26 +151,40 @@
         const tr = document.createElement('tr');
         const name = document.createElement('td'); name.textContent = device.name || device.id;
         const model = document.createElement('td'); model.textContent = device.model || '—';
-        const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived' : 'Active';
-        const power = document.createElement('td'); power.className = 'text-end'; power.textContent = number(device.powerW, 1) + ' W';
+        const status = document.createElement('td'); status.textContent = device.active === false ? 'Archived · history retained' : 'Active';
+        const power = document.createElement('td'); power.className = 'text-end'; power.textContent = device.active !== false && Number.isFinite(device.powerW) ? number(device.powerW, 1) + ' W' : '—';
         const total = document.createElement('td'); total.className = 'text-end'; total.textContent = number(device.energyWh / 1000, 3) + ' kWh';
-        const daily = document.createElement('td'); daily.className = 'text-end'; daily.textContent = number((device.totals?.daily?.[todayKey] || 0) / 1000, 3) + ' kWh';
-        tr.append(name, model, status, power, total, daily); body.append(tr);
+        const month = document.createElement('td'); month.className = 'text-end';
+        const deviceMonthWh = device.totals?.monthly?.[monthKey];
+        month.textContent = Number.isFinite(deviceMonthWh) ? number(deviceMonthWh / 1000, 3) + ' kWh' : '—';
+        const daily = document.createElement('td'); daily.className = 'text-end';
+        const dailyKey = displayedDayKey;
+        daily.textContent = hasDailyValue(device, dailyKey)
+          ? number(Number(device.totals.daily[dailyKey]) / 1000, 3) + ' kWh · ' + dailyKey : '—';
+        tr.append(name, model, status, power, total, month, daily); body.append(tr);
       }
 
       const periods = byId('periods');
       periods.replaceChildren();
       const date = new Date();
-      const monthKey = todayKey.slice(0, 7);
-      const yearKey = todayKey.slice(0, 4);
+      const archivedMonthWh = archivedDevices.reduce((sum, device) =>
+        sum + Number(device.totals?.monthly?.[monthKey] || 0), 0);
+      const archivedYearWh = archivedDevices.reduce((sum, device) =>
+        sum + Number(device.totals?.yearly?.[yearKey] || 0), 0);
       periods.append(
-        row('Today (' + todayKey + ')', number(todayWh / 1000, 3) + ' kWh'),
-        row('This month (' + monthKey + ')', number((data.totals?.monthly?.[monthKey] || 0) / 1000, 3) + ' kWh'),
-        row('This year (' + yearKey + ')', number((data.totals?.yearly?.[yearKey] || 0) / 1000, 3) + ' kWh')
+        row(displayedDayKey && displayedDayKey !== todayKey
+          ? 'Latest verified day (' + displayedDayKey + ')'
+          : displayedDayKey ? 'Today (' + todayKey + ')' : 'No verified daily value',
+        todayWh === null ? '—' : number(todayWh / 1000, 3) + ' kWh'),
+        row('This month (' + monthKey + ')', Number.isFinite(monthWh) ? number(monthWh / 1000, 3) + ' kWh' : '—'),
+        row('This year (' + yearKey + ')', Number.isFinite(yearWh) ? number(yearWh / 1000, 3) + ' kWh' : '—')
       );
+      if (archivedTodayDevices.length > 0) periods.append(row('Of which archived today', number(archivedTodayWh / 1000, 3) + ' kWh'));
+      if (archivedMonthWh > 0) periods.append(row('Of which archived this month', number(archivedMonthWh / 1000, 3) + ' kWh'));
+      if (archivedYearWh > 0) periods.append(row('Of which archived this year', number(archivedYearWh / 1000, 3) + ' kWh'));
       byId('updated').textContent = 'History file updated: ' + new Date(result.updatedAt).toLocaleString();
       byId('dashboard').hidden = false;
-      showMessage('History loaded from the Homebridge host. Energy values are estimates from power samples.', 'success');
+      showMessage(cloudHistory ? 'История получена из Tapo Cloud. Суточные значения — Wh; текущая мощность показывается отдельно.' : 'История загружена. Расход в режиме симуляции рассчитывается по выборкам мощности.', 'success');
     } catch (error) {
       byId('dashboard').hidden = true;
       showMessage('Could not load history: ' + error.message, 'danger');
@@ -134,22 +193,117 @@
     }
   }
 
+  const platformAlias = 'TapoEnergyMonitor';
+
+  function findPlatformConfig(config) {
+    if (!Array.isArray(config)) return -1;
+    const index = config.findIndex(item => item && item.platform === platformAlias);
+    // getPluginConfig() is scoped to this plugin. Its schema is singular,
+    // so a sole returned block is unambiguous even if the host omits "platform".
+    return index >= 0 ? index : config.length === 1 ? 0 : -1;
+  }
+
   async function init() {
     try {
       const config = await homebridge.getPluginConfig();
-      const platform = (config || []).find(item => item.platform === 'TapoEnergyMonitor');
-      tapoCloudPython = platform && typeof platform.tapoCloudPython === 'string' && platform.tapoCloudPython.trim() ? platform.tapoCloudPython.trim() : 'python3';
+      const index = findPlatformConfig(config);
+      const platform = index >= 0 ? config[index] : null;
+      byId('tapo-email').value = platform && typeof platform.tapoCloudUsername === 'string' ? platform.tapoCloudUsername : '';
+      byId('tapo-password').value = platform && typeof platform.tapoCloudPassword === 'string' ? platform.tapoCloudPassword : '';
       homebridge.showSchemaForm();
       homebridge.addEventListener('configChanged', (event) => {
         const updated = event.data || [];
-        const current = updated.find(item => item.platform === 'TapoEnergyMonitor');
-        tapoCloudPython = current && typeof current.tapoCloudPython === 'string' && current.tapoCloudPython.trim() ? current.tapoCloudPython.trim() : 'python3';
+        const currentIndex = findPlatformConfig(updated);
+        const current = currentIndex >= 0 ? updated[currentIndex] : null;
+        if (current) {
+          byId('tapo-email').value = typeof current.tapoCloudUsername === 'string' ? current.tapoCloudUsername : '';
+          byId('tapo-password').value = typeof current.tapoCloudPassword === 'string' ? current.tapoCloudPassword : '';
+        }
       });
       await refresh();
+      await refreshWattImports();
       window.setInterval(refresh, 15000);
     } catch (error) {
       showMessage('Homebridge UI initialization failed: ' + error.message, 'danger');
     }
+  }
+
+
+  function renderWattImports(data) {
+    const target = byId('watt-results');
+    target.replaceChildren();
+    for (const kind of ['individual', 'aggregate']) {
+      const item = data && data[kind];
+      if (!item) continue;
+      const heading = document.createElement('h6');
+      heading.textContent = item.label + ' · ' + item.recordCount + ' дней';
+      const summary = document.createElement('p');
+      summary.className = 'small text-muted';
+      summary.textContent = 'Watt CSV · ' + number(item.totalWh / 1000, 3) + ' kWh · ' + (item.records[0]?.date || '—') + ' — ' + (item.records[item.records.length - 1]?.date || '—') + ' · импорт: ' + new Date(item.importedAt).toLocaleString();
+      const table = document.createElement('table');
+      table.className = 'table table-sm';
+      const body = document.createElement('tbody');
+      for (const [period, values] of [['Месяцы', item.monthly], ['Годы', item.yearly]]) {
+        for (const [key, wh] of Object.entries(values || {}).sort((a, b) => a[0].localeCompare(b[0]))) {
+          const tr = document.createElement('tr');
+          const left = document.createElement('td'); left.textContent = period + ' · ' + key;
+          const right = document.createElement('td'); right.className = 'text-end'; right.textContent = number(wh / 1000, 3) + ' kWh';
+          tr.append(left, right); body.append(tr);
+        }
+      }
+      table.append(body); target.append(heading, summary, table);
+    }
+    if (!target.childNodes.length) target.textContent = 'Пока нет импортированных файлов Watt.';
+  }
+
+  async function refreshWattImports() {
+    const data = await homebridge.request('/watt-imports');
+    renderWattImports(data);
+  }
+
+  async function importWattCsv() {
+    const button = byId('watt-import');
+    const status = byId('watt-status');
+    const file = byId('watt-file').files[0];
+    if (!file) { status.textContent = 'Выбери CSV-файл.'; return; }
+    if (file.size > 1024 * 1024) { status.textContent = 'Файл больше 1 МБ.'; return; }
+    button.disabled = true;
+    status.textContent = 'Проверяю и импортирую CSV…';
+    try {
+      const csv = await file.text();
+      const result = await homebridge.request('/watt-import', {
+        kind: byId('watt-kind').value,
+        label: byId('watt-label').value,
+        csv
+      });
+      status.textContent = 'Импортировано: ' + result.recordCount + ' дней, ' + number(result.totalWh / 1000, 3) + ' kWh.';
+      byId('watt-file').value = '';
+      await refreshWattImports();
+    } catch (error) {
+      status.textContent = 'Ошибка импорта: ' + error.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function saveTapoCredentials() {
+    const username = byId('tapo-email').value.trim();
+    const password = byId('tapo-password').value;
+    if (!username || !password) throw new Error('Укажите email и пароль аккаунта Tapo.');
+
+    const config = await homebridge.getPluginConfig();
+    const index = findPlatformConfig(config);
+    if (index < 0) {
+      const count = Array.isArray(config) ? config.length : 0;
+      throw new Error('Не удалось однозначно определить блок платформы Tapo Energy Monitor (alias: ' +
+        platformAlias + ', найдено блоков: ' + count + '). Конфигурация не изменена.');
+    }
+
+    const updated = config.map((item, itemIndex) => itemIndex === index
+      ? { ...item, tapoCloudUsername: username, tapoCloudPassword: password }
+      : item);
+    await homebridge.updatePluginConfig(updated);
+    return { username, password };
   }
 
   async function testTapoCloud() {
@@ -157,20 +311,72 @@
     const status = byId('tapo-test-status');
     const resultBox = byId('tapo-test-result');
     button.disabled = true;
-    status.textContent = 'Подключаемся к облаку TP-Link…';
+    status.textContent = 'Сохраняю данные и подключаюсь к облаку TP-Link…';
     resultBox.replaceChildren();
+    let persistCredentials = false;
+    let retainCredentialsForMfa = false;
     try {
+      const credentials = await saveTapoCredentials();
+      persistCredentials = true;
       const result = await homebridge.request('/tapo-cloud-test', {
-        username: byId('tapo-email').value,
-        password: byId('tapo-password').value,
+        username: credentials.username,
+        password: credentials.password,
         mfaCode: byId('tapo-mfa').value,
-        pythonExecutable: tapoCloudPython
       });
       status.textContent = result.ok ? 'Проверка завершена' : 'Проверка не пройдена';
       const alert = document.createElement('div');
       alert.className = 'alert alert-' + (result.ok ? 'success' : 'warning');
       alert.textContent = result.message || result.code || 'Нет результата';
       resultBox.append(alert);
+      if (Array.isArray(result.diagnostics) && result.diagnostics.length) {
+        const diagnosticTitle = document.createElement('h5');
+        diagnosticTitle.textContent = 'Поэтапная диагностика';
+        resultBox.append(diagnosticTitle);
+        const diagnosticTable = document.createElement('table');
+        diagnosticTable.className = 'table table-sm table-bordered align-middle';
+        diagnosticTable.style.minWidth = '760px';
+        const diagnosticHead = document.createElement('thead');
+        const diagnosticHeadRow = document.createElement('tr');
+        for (const label of ['Этап', 'Результат', 'Время', 'Код', 'Причина']) {
+          const th = document.createElement('th'); th.textContent = label; diagnosticHeadRow.append(th);
+        }
+        diagnosticHead.append(diagnosticHeadRow); diagnosticTable.append(diagnosticHead);
+        const diagnosticBody = document.createElement('tbody');
+        const stageNames = {
+          regional_server: 'Региональный сервер',
+          authentication: 'Авторизация / MFA',
+          thing_service: 'Поиск Thing API',
+          device_list: 'Список устройств',
+          usage: 'Энергопоказания P110M',
+          usage_format: 'Разбор дневной истории',
+          usage_counters: 'Сверка счётчиков и дневной истории'
+        };
+        const statusNames = { success: 'Успешно', failed: 'Ошибка', required: 'Нужен код MFA', skipped: 'Пропущено' };
+        for (const item of result.diagnostics) {
+          const tr = document.createElement('tr');
+          for (const value of [
+            stageNames[item.stage] || item.stage,
+            statusNames[item.status] || item.status,
+            Number.isFinite(item.durationMs) ? item.durationMs + ' мс' : '—',
+            Number.isInteger(item.code) ? String(item.code) : (item.errorCode || '—'),
+            item.reason || (Number.isInteger(item.httpStatus) ? 'HTTP ' + item.httpStatus : '—')
+          ]) {
+            const td = document.createElement('td'); td.textContent = value;
+            if (value === (item.reason || '—')) { td.style.minWidth = '280px'; td.style.whiteSpace = 'normal'; td.style.overflowWrap = 'anywhere'; }
+            tr.append(td);
+          }
+          diagnosticBody.append(tr);
+        }
+        diagnosticTable.append(diagnosticBody);
+        const diagnosticScroll = document.createElement('div');
+        diagnosticScroll.className = 'table-responsive';
+        diagnosticScroll.append(diagnosticTable);
+        resultBox.append(diagnosticScroll);
+        const privacyNote = document.createElement('p');
+        privacyNote.className = 'small text-muted';
+        privacyNote.textContent = 'Отчёт показывает этапы, длительность, HTTP-статус, сетевой код и безопасное пояснение ошибки. Пароль, email, код MFA и токены не выводятся.';
+        resultBox.append(privacyNote);
+      }
       if (result.ok) {
         const summary = document.createElement('p');
         summary.textContent = 'Найдено устройств Tapo: ' + result.deviceCount + '. P110M: ' + result.p110mCount + '.';
@@ -191,8 +397,11 @@
           const model = document.createElement('td'); model.textContent = device.model || '—';
           const reading = readings.get(device.id);
           const state = document.createElement('td');
-          if (reading && reading.usage) {
-            state.textContent = 'Получен ответ Thing Cloud API';
+          if (reading && reading.usage && reading.history && reading.history.ok) {
+            const meta = reading.history.meta;
+            state.textContent = 'Предварительно: ' + meta.count + ' точек · ' + (meta.firstDate || '—') + ' — ' + (meta.lastDate || '—') + ' · ' + (meta.timeZone || 'UTC') + (meta.timeZoneKnown ? '' : ' (UTC fallback)') + ' · даты требуют сверки';
+          } else if (reading && reading.usage) {
+            state.textContent = 'Ответ Thing Cloud API получен; формат истории не подтверждён';
           } else if (reading && reading.error) {
             state.textContent = reading.error;
           } else if (String(device.model || '').toUpperCase().includes('P110M')) {
@@ -220,14 +429,21 @@
           }
         }
         table.append(body); resultBox.append(table);
-        if (result.p110mCount > 0 && !(result.readings || []).some(item => typeof item.powerW === 'number')) {
+        if (result.p110mCount > 0 && !(result.readings || []).some(item => item.history && item.history.ok)) {
           const note = document.createElement('div');
           note.className = 'alert alert-warning';
-          note.textContent = 'Аккаунт и P110M обнаружены, но формат ответа энергомониторинга пока не подтверждён.';
+          note.textContent = 'Аккаунт и P110M обнаружены, но дневную историю в ответе облака распознать не удалось.';
           resultBox.append(note);
         }
-      } else if (result.code === 'mfa_required') {
-        byId('tapo-mfa').focus();
+      }
+      if (result.code === 'mfa_required' || result.code === 'mfa_failed') {
+        persistCredentials = false;
+        retainCredentialsForMfa = true;
+        byId('tapo-mfa-wrap').hidden = false;
+        if (result.code === 'mfa_required') byId('tapo-mfa').focus();
+      } else {
+        byId('tapo-mfa-wrap').hidden = true;
+        byId('tapo-mfa').value = '';
       }
     } catch (error) {
       status.textContent = 'Ошибка проверки';
@@ -236,11 +452,26 @@
       alert.textContent = error.message;
       resultBox.append(alert);
     } finally {
+      // Save only after the check has finished; a pending MFA challenge keeps the settings modal open.
+      if (persistCredentials) {
+        try {
+          await homebridge.savePluginConfig();
+          status.textContent += ' · данные аккаунта сохранены';
+        } catch (saveError) {
+          status.textContent += ' · не удалось сохранить данные: ' + saveError.message;
+        }
+      }
+      if (!retainCredentialsForMfa) {
+        byId('tapo-password').value = '';
+      }
+      byId('tapo-mfa').value = '';
       button.disabled = false;
     }
   }
 
   byId('tapo-test').addEventListener('click', testTapoCloud);
+  byId('watt-import').addEventListener('click', importWattCsv);
+  byId('watt-kind').addEventListener('change', () => { byId('watt-label-wrap').hidden = byId('watt-kind').value !== 'individual'; });
   byId('refresh').addEventListener('click', refresh);
   homebridge.addEventListener('ready', init);
 })();

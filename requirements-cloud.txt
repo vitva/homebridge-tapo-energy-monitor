@@ -1,3 +1,0 @@
-# Optional runtime dependency for the Tapo cloud diagnostic.
-# Python 3.10 or newer is required.
-tplink-cloud-api>=5.2.2,<5.3.0
