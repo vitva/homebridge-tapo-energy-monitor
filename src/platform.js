@@ -9,6 +9,7 @@ const {
   createEstimatedMeterAccessory,
   updateEstimatedMeter,
   createCloudEnergyMeterAccessory,
+  createCloudEnergySensorAccessory,
   updateCloudEnergyMeter
 } = require('./matter-meter');
 
@@ -41,6 +42,7 @@ class TapoEnergyMonitorPlatform {
     this.store = null;
     this.matterMeterUuid = null;
     this.cloudMatterMeterUuid = null;
+    this.cloudMatterSensorTestUuid = null;
     this.cloudMatterLastReading = null;
     this.cloudMatterRegistrationRetryAt = 0;
 
@@ -198,6 +200,7 @@ class TapoEnergyMonitorPlatform {
         throw new Error('Homebridge accepted the registration request but the Matter energy endpoint/cluster is not available.');
       }
       this.log.info('[MATTER CLOUD REGISTERED] %s | %s', accessory.UUID, accessory.displayName);
+      await this.registerCloudMatterSensorTest();
 
       // Do not remove the old simulation meter until the cloud endpoint is safely registered.
       if (typeof matter.unregisterPlatformAccessories === 'function') {
@@ -215,6 +218,31 @@ class TapoEnergyMonitorPlatform {
       this.cloudMatterMeterUuid = null;
       this.cloudMatterRegistrationRetryAt = Date.now() + 300000;
       this.log.warn('Cloud Matter meter registration failed; will retry after 5 minutes. Cloud history will continue: %s', error.message);
+    }
+  }
+
+  async registerCloudMatterSensorTest() {
+    const matter = this.api && this.api.matter;
+    if (!matter || typeof matter.registerPlatformAccessories !== 'function' ||
+      this.cloudMatterSensorTestUuid) return false;
+
+    try {
+      const accessory = createCloudEnergySensorAccessory(
+        this.api,
+        this.config.cloudMatterSensorTestName || 'Tapo Energy — Датчик (тест)'
+      );
+      if (!accessory) {
+        this.log.info('[MATTER SENSOR TEST] ElectricalSensor is not exposed by this Homebridge version; test accessory skipped.');
+        return false;
+      }
+      await matter.registerPlatformAccessories(PLUGIN_IDENTIFIER, PLATFORM_NAME, [accessory]);
+      this.cloudMatterSensorTestUuid = accessory.UUID;
+      this.log.info('[MATTER SENSOR TEST REGISTERED] %s | %s', accessory.UUID, accessory.displayName);
+      return true;
+    } catch (error) {
+      this.cloudMatterSensorTestUuid = null;
+      this.log.warn('[MATTER SENSOR TEST] registration failed; ElectricalMeter remains active: %s', error.message);
+      return false;
     }
   }
 
@@ -276,6 +304,17 @@ class TapoEnergyMonitorPlatform {
     }
 
     if (!meter) return null;
+
+    // Publish the exact same cloud-derived energy values to the separate
+    // ElectricalSensor endpoint. A failure here must not affect the meter.
+    if (this.cloudMatterSensorTestUuid) {
+      try {
+        await updateCloudEnergyMeter(this.api, this.cloudMatterSensorTestUuid, summary, null);
+        this.log.info('[MATTER SENSOR TEST] cloud energy update dispatched.');
+      } catch (error) {
+        this.log.warn('[MATTER SENSOR TEST] cloud energy update failed: %s', error.message);
+      }
+    }
 
     this.cloudMatterLastReading = {
       cumulativeEnergyWh: meter.cumulativeEnergyWh,
