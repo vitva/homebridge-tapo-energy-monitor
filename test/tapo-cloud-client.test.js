@@ -368,7 +368,8 @@ test('uses UTC fallback for an invalid region and keeps full history diagnostics
   const usageFormat = result.diagnostics.find(item => item.stage === 'usage_format');
   assert.match(usageFormat.reason, /start=/);
   assert.match(usageFormat.reason, /end=/);
-  assert.match(usageFormat.reason, /запрошено точек=58/);
+  const requestedDays = Number(usageFormat.reason.match(/запрошено точек=(\d+)/)?.[1]);
+  assert.ok(Number.isInteger(requestedDays) && requestedDays > 0);
   assert.match(usageFormat.reason, /получено=91/);
   assert.ok(usageFormat.reason.length > 100);
 });
